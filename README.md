@@ -4,15 +4,16 @@
 
 ### Pre-Requisites
 
-1. Databricks Workspace
-2. Databricks Cluster 13.3 Beta ML LTS
-3. Azure Devops Repo
-   1. url: https://dev.azure.com/<username>/_git/<repo_name>
+1. Existing Databricks Workspace
+2. Create Databricks Cluster 13.3 Beta ML LTS (non UC cluster)
+3. Access from cluster to git repos with the code
+4. Azure Devops Repo
+   1. url: https://dev.azure.com/username/_git/<repo_name>
    2. user: <username>
-   3. ado personal access token: <https token>
-4. Github
-   1. url https://github.com/<org>/<repo>.git
-   2. user: <username>
+   3. ado personal access token: [https token]
+5. Github
+   1. url https://github.com/[org]/repo.git
+   2. user: [username]
    3. github personal access token: ghp_*********
       1. Make sure your github token is set to classic and has access to repos.
 
