@@ -71,7 +71,7 @@ def RepoScanner():
             set_loading(False)
 
     with solara.Card("Scan Mounts in Repos"):
-        solara.InputText("Repo Path", value=repo_url, on_value=set_repo_url)
+        solara.InputText("Repo Path", value=repo_url, on_value=set_repo_url, password=True)
         solara.Button("Scan", style="margin-bottom: 25px", on_click=get_issues)
         if error:
             solara.Error("Error: " + error)
