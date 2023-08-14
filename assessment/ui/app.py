@@ -12,6 +12,8 @@ from assessment.code_scanner.scan import LocalFSCodeStrategy
 from assessment.code_scanner.utils import get_ws_client, get_ws_browser_hostname
 
 
+workspace_url = get_ws_browser_hostname() or get_ws_client(default_profile="uc-assessment-azure").config.host
+
 @solara.component
 def MountScanner():
     mounts, set_mounts = solara.use_state(None)
@@ -19,6 +21,14 @@ def MountScanner():
 
     mounts: pd.DataFrame
     set_mounts: Callable[[pd.DataFrame], None]
+
+    def get_raw_data(csv=False):
+        df_copy = mounts.copy(deep=True)
+        df_copy['workspace_url'] = workspace_url
+        if csv is True:
+            return df_copy.to_csv(index=False)
+
+        return df_copy.to_parquet(index=False)
 
     def get_mounts():
         set_loading(True)
@@ -35,7 +45,7 @@ def MountScanner():
             solara.ProgressLinear(True)
         elif mounts is not None:
             solara.FileDownload(label="Download Mounts Info", filename="mounts.csv",
-                                data=lambda: mounts.to_csv(index=False))
+                                data=lambda: get_raw_data(csv=True))
             solara.DataFrame(mounts)
 
 
@@ -51,25 +61,9 @@ def RepoScanner():
     issues: pd.DataFrame
     set_issues: Callable[[pd.DataFrame], None]
 
-    def get_ws_url_string():
-        ws_client = get_ws_client(default_profile="uc-assessment-azure")
-        # Add a new column "workspace_url"
-
-        ws_url = get_ws_browser_hostname()
-        if ws_url is None:
-            ws_url = ws_client.config.host
-        return "ws url: " + ws_url+ "\t browser hostname: "+ str(get_ws_browser_hostname())
     def get_raw_data(csv=False):
         df_copy = issues.copy(deep=True)
-
-        ws_client = get_ws_client(default_profile="uc-assessment-azure")
-        # Add a new column "workspace_url"
-
-        ws_url = get_ws_browser_hostname()
-        if ws_url is None:
-            ws_url = ws_client.config.host
-        df_copy['workspace_url'] = ws_url
-        # set_error("ws url: " + ws_url+ "\t browser hostname: "+ get_ws_browser_hostname()) # TODO: remove after debugging
+        df_copy['workspace_url'] = workspace_url
         if csv is True:
             return df_copy.to_csv(index=False)
 
@@ -129,7 +123,6 @@ def RepoScanner():
     with solara.Card("Scan Mounts in Repos"):
         solara.Info("Note: This will ignore mounts: DatabricksRoot, DbfsReserved, UnityCatalogVolumes, "
                     "databricks/mlflow-tracking, databricks-datasets, databricks/mlflow-registry, databricks-results.")
-        solara.Error(f"Error: {get_ws_url_string()}")
         solara.InputText("Repo Url", value=repo_url, on_value=set_repo_url)
         solara.InputText("User Name", value=user, on_value=set_user)
         solara.InputText("Token", value=token, on_value=set_token, password=True)
