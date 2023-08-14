@@ -73,9 +73,13 @@ def variations(mnt_path):
     ]
 
 
+def custom_mount_sort(mnt):
+    return -len(mnt.mountPoint), mnt.mountPoint
+
+
 @functools.lru_cache
 def get_mounts() -> List:
-    return get_dbutils().fs.mounts()
+    return list(sorted(get_dbutils().fs.mounts(), key=custom_mount_sort))
 
 def mounts_iter(valid_prefix: str) -> Iterator[Mount]:
     for mnt in get_mounts():
