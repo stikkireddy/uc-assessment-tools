@@ -1,5 +1,7 @@
-databricks-sdk>=0.4.0
+databricks-sdk>=0.4.0, <1.0.0
 gitpython
 pandas
-solara
+solara>=1.19.0, <2.0.0
 pyre2
+plotly
+pyarrow

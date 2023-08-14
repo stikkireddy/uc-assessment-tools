@@ -9,7 +9,7 @@ import solara.lab
 from assessment.code_scanner.mounts import mounts_pdf
 from assessment.code_scanner.repos import git_repo
 from assessment.code_scanner.scan import LocalFSCodeStrategy
-from assessment.code_scanner.utils import get_ws_client
+from assessment.code_scanner.utils import get_ws_client, get_ws_browser_hostname
 
 
 @solara.component
@@ -50,6 +50,39 @@ def RepoScanner():
 
     issues: pd.DataFrame
     set_issues: Callable[[pd.DataFrame], None]
+
+
+    def get_raw_data(csv=False):
+        df_copy = issues.copy(deep=True)
+
+        ws_client = get_ws_client(default_profile="uc-assessment-azure")
+        # Add a new column "workspace_url"
+        df_copy['workspace_url'] = get_ws_browser_hostname() or ws_client.config.host
+        if csv is True:
+            return df_copy.to_csv(index=False)
+
+        return df_copy.to_parquet(index=False)
+
+    def get_plotly_mounts():
+        import plotly.express as px
+        # Group and count the occurrences of each issue type and detail combination
+        grouped_counts = issues.groupby(['issue_type', 'issue_detail']).size().reset_index(name='count')
+
+        # Combine issue_type and issue_detail columns for coloring
+        grouped_counts['color'] = grouped_counts['issue_type'] + ' - ' + grouped_counts['issue_detail']
+
+        # Create a pie chart using Plotly Express
+        fig = px.pie(grouped_counts, values='count', names='color', title="Issue Type and Detail Breakdown")
+
+        # Update color scale to match the issue types
+        color_scale = px.colors.qualitative.Set1[:len(grouped_counts['issue_type'].unique())]
+        fig.update_traces(marker=dict(colors=color_scale))
+        return fig
+        # grouped_counts = issues.groupby(['issue_type', 'issue_detail']).size().reset_index(name='count')
+        #
+        # # Create a pie chart using Plotly Express
+        # return px.pie(grouped_counts, values='count', names='issue_detail', title="Issue Type and Detail Breakdown",
+        #              color='issue_type')
 
     def get_issues():
         if repo_url is None or repo_url == "":
@@ -94,9 +127,15 @@ def RepoScanner():
             solara.Info(f"Loading...")
             solara.ProgressLinear(True)
         elif issues is not None:
-            solara.FileDownload(label="Download Issues", filename="issues.csv",
-                                data=lambda: issues.to_csv(index=False))
-            solara.DataFrame(issues)
+            solara.FileDownload(label="Download Issues Parquet", filename="issues.parquet",
+                                data=lambda: get_raw_data(csv=False))
+            solara.FileDownload(label="Download Issues CSV", filename="issues.csv",
+                                data=lambda: get_raw_data(csv=True))
+            with solara.lab.Tabs():
+                with solara.lab.Tab("Raw Data"):
+                    solara.DataFrame(issues)
+                with solara.lab.Tab("Issue Breakdown Pie Chart"):
+                    solara.FigurePlotly(get_plotly_mounts())
 
 
 @solara.component

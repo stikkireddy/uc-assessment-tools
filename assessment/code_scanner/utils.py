@@ -1,7 +1,17 @@
+import json
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 from databricks.sdk import WorkspaceClient
+
+
+def get_ws_browser_hostname() -> Optional[str]:
+    if in_dbx_notebook():
+        _dbutils = get_dbutils()
+        return json.loads(_dbutils.notebook.entry_point.getDbutils().notebook().getContext().toJson()).get("tags", {})\
+            .get("browserHostName")
+
+    return None
 
 
 def get_ws_client(default_profile="uc-assessment-azure"):

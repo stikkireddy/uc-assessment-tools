@@ -1,5 +1,7 @@
 from setuptools import setup, find_packages
 
+reqs = open("requirements.txt").read().split("\n")
+
 setup(
     name='databricks-uc-assessments',
     author='Dipankar Kushari, Gary Diana, Sri Tikkireddy',
@@ -7,12 +9,7 @@ setup(
     description='A package for a ui to do misc stuff in databricks',
     packages=find_packages(exclude=['notebooks']),
     setup_requires=['setuptools_scm'],
-    install_requires=[
-        "databricks-sdk>=0.4.0, <1.0.0",
-        "solara>=1.19.0, <2.0.0",
-        "gitpython",
-        "pyre2"
-    ],
+    install_requires=reqs,
     license_files=('LICENSE',),
     classifiers=[
         'Intended Audience :: Developers',

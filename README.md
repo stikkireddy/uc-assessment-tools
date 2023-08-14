@@ -26,3 +26,4 @@ https://raw.githubusercontent.com/stikkireddy/uc-assessment-tools/main/notebooks
     1. This is just a databricks quirk
 5. In the widget/ui go to Mount Info tab, run it and then download the mount info csv file
 6. In the widget/ui go to Repo Scanner tab, enter your repo info, click scan and download issues
+   1. After running the scan go to Issue breakdown chart and click on the chart and download as png.
