@@ -51,13 +51,19 @@ def RepoScanner():
     issues: pd.DataFrame
     set_issues: Callable[[pd.DataFrame], None]
 
-
     def get_raw_data(csv=False):
         df_copy = issues.copy(deep=True)
 
         ws_client = get_ws_client(default_profile="uc-assessment-azure")
         # Add a new column "workspace_url"
-        df_copy['workspace_url'] = get_ws_browser_hostname() or ws_client.config.host
+
+        ws_url = get_ws_browser_hostname()
+        if ws_url is not None:
+            df_copy['workspace_url'] = ws_url
+        else:
+            df_copy['workspace_url'] = ws_client.config.host
+
+        set_error(ws_url) # TODO: remove after debugging
         if csv is True:
             return df_copy.to_csv(index=False)
 
