@@ -54,8 +54,10 @@ class Issue:
 
     @staticmethod
     def issues_to_df(issues: Iterator['Issue']) -> pd.DataFrame:
-        return pd.DataFrame([asdict(issue, dict_factory=enum_to_string_factory) for issue in issues])
-
+        issues = [asdict(issue, dict_factory=enum_to_string_factory) for issue in issues]
+        if len(issues) > 0:
+            return pd.DataFrame(issues)
+        return pd.DataFrame(columns=["issue_type", "issue_detail", "issue_source", "line_number", "matched_regex",])
 
 @dataclass
 class IssueInfo:
@@ -197,7 +199,12 @@ class CodeStrategy(ABC):
 
     def iter_issues(self) -> Iterator[Issue]:
         for issue_source, content_ in self.iter_content():
-            yield from generate_issues(content_, issue_cfg, issue_source=issue_source, file_name=None)
+            try:
+                print(f"Scanning {issue_source.source_metadata.get('file_path')}")
+                yield from generate_issues(content_, issue_cfg, issue_source=issue_source, file_name=None)
+            except (OSError, UnicodeDecodeError):
+                print(f"Unable to open file {issue_source.source_metadata.get('file_path')}; src: {str(issue_source)}")
+                pass
 
     def to_df(self) -> pd.DataFrame:
         return Issue.issues_to_df(self.iter_issues())
@@ -224,8 +231,8 @@ class LocalFSCodeStrategy(CodeStrategy):
                         yield IssueSource(SourceType.FILE, source_metadata={
                             "file_path": file_path
                         }), fp
-                    except OSError:
-                        pass
+                    except (OSError, UnicodeDecodeError):
+                        print(f"Unable to open file {file_path}")
 
 
 class TestingCodeStrategyClusters(CodeStrategy):

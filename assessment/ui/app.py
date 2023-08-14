@@ -12,6 +12,8 @@ from assessment.code_scanner.scan import LocalFSCodeStrategy
 from assessment.code_scanner.utils import get_ws_client, get_ws_browser_hostname
 
 
+workspace_url = get_ws_browser_hostname() or get_ws_client(default_profile="uc-assessment-azure").config.host
+
 @solara.component
 def MountScanner():
     mounts, set_mounts = solara.use_state(None)
@@ -19,6 +21,14 @@ def MountScanner():
 
     mounts: pd.DataFrame
     set_mounts: Callable[[pd.DataFrame], None]
+
+    def get_raw_data(csv=False):
+        df_copy = mounts.copy(deep=True)
+        df_copy['workspace_url'] = workspace_url
+        if csv is True:
+            return df_copy.to_csv(index=False)
+
+        return df_copy.to_parquet(index=False)
 
     def get_mounts():
         set_loading(True)
@@ -35,7 +45,7 @@ def MountScanner():
             solara.ProgressLinear(True)
         elif mounts is not None:
             solara.FileDownload(label="Download Mounts Info", filename="mounts.csv",
-                                data=lambda: mounts.to_csv(index=False))
+                                data=lambda: get_raw_data(csv=True))
             solara.DataFrame(mounts)
 
 
@@ -51,13 +61,9 @@ def RepoScanner():
     issues: pd.DataFrame
     set_issues: Callable[[pd.DataFrame], None]
 
-
     def get_raw_data(csv=False):
         df_copy = issues.copy(deep=True)
-
-        ws_client = get_ws_client(default_profile="uc-assessment-azure")
-        # Add a new column "workspace_url"
-        df_copy['workspace_url'] = get_ws_browser_hostname() or ws_client.config.host
+        df_copy['workspace_url'] = workspace_url
         if csv is True:
             return df_copy.to_csv(index=False)
 
@@ -109,7 +115,6 @@ def RepoScanner():
                     # this identifies all the issues in the repo
                     set_issues(scan.to_df())
         except Exception as e:
-            print(e)
             set_error(str(e))
         finally:
             set_loading(False)
@@ -121,16 +126,17 @@ def RepoScanner():
         solara.InputText("User Name", value=user, on_value=set_user)
         solara.InputText("Token", value=token, on_value=set_token, password=True)
         solara.Button("Scan", style="margin-bottom: 25px", on_click=get_issues)
-        if error:
+        if error is not None and error != "":
             solara.Error("Error: " + error)
         if loading is True:
             solara.Info(f"Loading...")
             solara.ProgressLinear(True)
         elif issues is not None:
-            solara.FileDownload(label="Download Issues Parquet", filename="issues.parquet",
-                                data=lambda: get_raw_data(csv=False))
-            solara.FileDownload(label="Download Issues CSV", filename="issues.csv",
-                                data=lambda: get_raw_data(csv=True))
+            with solara.Row():
+                solara.FileDownload(label="Download Issues Parquet", filename="issues.parquet",
+                                    data=lambda: get_raw_data(csv=False))
+                solara.FileDownload(label="Download Issues CSV", filename="issues.csv",
+                                    data=lambda: get_raw_data(csv=True))
             with solara.lab.Tabs():
                 with solara.lab.Tab("Raw Data"):
                     solara.DataFrame(issues)
