@@ -31,8 +31,9 @@ def get_dbutils():
         FakeMount(source="wasbs://container@stoarge.windows.com/some_path", mountPoint="/mnt/some_other_location"),
         FakeMount(source="abfss://discovery@stoarge.windows.com/ml_discovery", mountPoint="/mnt/ADLS_Discovery/"),
         FakeMount(source="abfss://ADLS_MLOps@stoarge.windows.com/some_mlops", mountPoint="/mnt/ADLS_MLOps"),
-        *[FakeMount(source=f"abfss://fake_container_{i}@stoarge.windows.com/fake_mnt_{i}", mountPoint=f"/mnt/fake_mnt_{i}") for i in range(150)]
-        # blob not possbile to migrate
+        *[FakeMount(source=f"abfss://fake_container_{i}@stoarge.windows.com/fake_mnt_{i}",
+                    mountPoint=f"/mnt/fake_mnt_{i}") for i in range(150)]
+        # blob not possible to migrate
     ]
     return dbutils
 
