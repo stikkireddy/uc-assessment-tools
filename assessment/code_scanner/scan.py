@@ -127,46 +127,46 @@ def generate_issues(content: TextIO, issue_regexprs: Dict[str, IssueInfo],
         # identify if exact / simple match was found, if so break
         # if not then scan through all the regexes
         # TODO: valid prefix is different between clouds
-        fount_mount_exact_match = False
-        for mnt in mounts_iter(valid_prefix):
-            r, simple_match = mnt.find_simple_match(line)
-            if simple_match is not None:
-                if is_this_a_fuse_mount(simple_match, line):
-                    issue_detail = "MAYBE_FUSE_MOUNT_NEEDS_VOLUMES"
-                elif also_contains_other_cloud_stuff(line):
-                    issue_detail = "MAYBE_FOUND_OTHER_CLOUD_PROTOCOLS"
-                else:
-                    issue_detail = "SIMPLE"
-                yield Issue(line_number=int(idx) + 1, matched_regex=r,
-                            matched_value=simple_match,
-                            matched_line=line.strip(),
-                            issue_source=issue_source,
-                            issue_type="MATCHING_MOUNT_USE",
-                            issue_detail=issue_detail)
-                fount_mount_exact_match = True
-                break
-            r, maybe_match = mnt.find_maybe_match(line)
-            if maybe_match is not None:
-                yield Issue(line_number=int(idx) + 1, matched_regex=r,
-                            matched_value=maybe_match,
-                            matched_line=line.strip(),
-                            issue_source=issue_source,
-                            issue_type="MATCHING_MOUNT_USE",
-                            issue_detail="MAYBE")
-                fount_mount_exact_match = True
-                break
-            r, cannot_convert_match = mnt.find_cannot_convert_match(line)
-            if cannot_convert_match is not None:
-                yield Issue(line_number=int(idx) + 1, matched_regex=r,
-                            matched_value=cannot_convert_match,
-                            matched_line=line.strip(),
-                            issue_source=issue_source,
-                            issue_type="MATCHING_MOUNT_USE",
-                            issue_detail="CANNOT_CONVERT")
-                fount_mount_exact_match = True
-                break
-        if fount_mount_exact_match:
-            continue
+        # fount_mount_exact_match = False
+        # for mnt in mounts_iter(valid_prefix):
+        #     r, simple_match = mnt.find_simple_match(line)
+        #     if simple_match is not None:
+        #         if is_this_a_fuse_mount(simple_match, line):
+        #             issue_detail = "MAYBE_FUSE_MOUNT_NEEDS_VOLUMES"
+        #         elif also_contains_other_cloud_stuff(line):
+        #             issue_detail = "MAYBE_FOUND_OTHER_CLOUD_PROTOCOLS"
+        #         else:
+        #             issue_detail = "SIMPLE"
+        #         yield Issue(line_number=int(idx) + 1, matched_regex=r,
+        #                     matched_value=simple_match,
+        #                     matched_line=line.strip(),
+        #                     issue_source=issue_source,
+        #                     issue_type="MATCHING_MOUNT_USE",
+        #                     issue_detail=issue_detail)
+        #         fount_mount_exact_match = True
+        #         break
+        #     r, maybe_match = mnt.find_maybe_match(line)
+        #     if maybe_match is not None:
+        #         yield Issue(line_number=int(idx) + 1, matched_regex=r,
+        #                     matched_value=maybe_match,
+        #                     matched_line=line.strip(),
+        #                     issue_source=issue_source,
+        #                     issue_type="MATCHING_MOUNT_USE",
+        #                     issue_detail="MAYBE")
+        #         fount_mount_exact_match = True
+        #         break
+        #     r, cannot_convert_match = mnt.find_cannot_convert_match(line)
+        #     if cannot_convert_match is not None:
+        #         yield Issue(line_number=int(idx) + 1, matched_regex=r,
+        #                     matched_value=cannot_convert_match,
+        #                     matched_line=line.strip(),
+        #                     issue_source=issue_source,
+        #                     issue_type="MATCHING_MOUNT_USE",
+        #                     issue_detail="CANNOT_CONVERT")
+        #         fount_mount_exact_match = True
+        #         break
+        # if fount_mount_exact_match:
+        #     continue
         for r, info in issue_regexprs.items():
             regex_res = re.search(r, line)
             if regex_res is not None:
