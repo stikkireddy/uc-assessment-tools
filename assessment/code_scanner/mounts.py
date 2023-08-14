@@ -12,7 +12,7 @@ import pandas as pd
 from assessment.code_scanner.utils import get_dbutils
 
 # TODO: remove this hard coded value
-valid_prefix = "abfss"
+temp_valid_prefix = "abfss"
 
 
 @dataclass
@@ -76,6 +76,7 @@ def variations(mnt_path):
 @functools.lru_cache
 def get_mounts() -> List:
     return get_dbutils().fs.mounts()
+
 
 def mounts_iter(valid_prefix: str) -> Iterator[Mount]:
     for mnt in get_mounts():

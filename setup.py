@@ -11,6 +11,7 @@ setup(
         "databricks-sdk>=0.4.0, <1.0.0",
         "solara>=1.19.0, <2.0.0",
         "gitpython",
+        "pyre2"
     ],
     license_files=('LICENSE',),
     classifiers=[
