@@ -1,5 +1,9 @@
 import functools
-import re
+try:
+    import re2 as re
+except ImportError:
+    import re
+
 from dataclasses import dataclass
 from typing import Optional, List, Iterator, Tuple
 
