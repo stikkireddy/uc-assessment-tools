@@ -43,6 +43,8 @@ def RepoScanner():
     loading, set_loading = solara.use_state(False)
     error, set_error = solara.use_state("")
     repo_url, set_repo_url = solara.use_state("")
+    user, set_user = solara.use_state("")
+    token, set_token = solara.use_state("")
 
     issues: pd.DataFrame
     set_issues: Callable[[pd.DataFrame], None]
@@ -51,7 +53,14 @@ def RepoScanner():
         if repo_url is None or repo_url == "":
             set_error("Please enter a repo url")
             return
+        if user is None or user == "":
+            set_error("Please enter a user")
+            return
+        if token is None or token == "":
+            set_error("Please enter a token")
+            return
         set_error("")
+        built_repo_url = repo_url.replace("https://", f"https://{user}:{token}@")
         try:
             set_loading(True)
             ws_client = get_ws_client(default_profile="uc-assessment-azure")
@@ -59,7 +68,7 @@ def RepoScanner():
             user_name = curr_user.display_name
             email = curr_user.user_name
             with tempfile.TemporaryDirectory() as path:
-                with git_repo(repo_url, None, path, email=email, full_name=user_name, delete=True):
+                with git_repo(built_repo_url, None, path, email=email, full_name=user_name, delete=True):
                     print("Inside the context manager")
                     scan = LocalFSCodeStrategy([Path(path)])
                     # this identifies all the issues in the repo
@@ -71,7 +80,9 @@ def RepoScanner():
             set_loading(False)
 
     with solara.Card("Scan Mounts in Repos"):
-        solara.InputText("Repo Path", value=repo_url, on_value=set_repo_url, password=True)
+        solara.InputText("Repo Path", value=repo_url, on_value=set_repo_url)
+        solara.InputText("User Name", value=user, on_value=set_user)
+        solara.InputText("Token", value=token, on_value=set_token, password=True)
         solara.Button("Scan", style="margin-bottom: 25px", on_click=get_issues)
         if error:
             solara.Error("Error: " + error)
