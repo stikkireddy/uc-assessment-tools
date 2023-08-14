@@ -51,6 +51,14 @@ def RepoScanner():
     issues: pd.DataFrame
     set_issues: Callable[[pd.DataFrame], None]
 
+    def get_ws_url_string():
+        ws_client = get_ws_client(default_profile="uc-assessment-azure")
+        # Add a new column "workspace_url"
+
+        ws_url = get_ws_browser_hostname()
+        if ws_url is None:
+            ws_url = ws_client.config.host
+        return "ws url: " + ws_url+ "\t browser hostname: "+ str(get_ws_browser_hostname())
     def get_raw_data(csv=False):
         df_copy = issues.copy(deep=True)
 
@@ -58,12 +66,10 @@ def RepoScanner():
         # Add a new column "workspace_url"
 
         ws_url = get_ws_browser_hostname()
-        if ws_url is not None:
-            df_copy['workspace_url'] = ws_url
-        else:
-            df_copy['workspace_url'] = ws_client.config.host
-
-        set_error(ws_url) # TODO: remove after debugging
+        if ws_url is None:
+            ws_url = ws_client.config.host
+        df_copy['workspace_url'] = ws_url
+        # set_error("ws url: " + ws_url+ "\t browser hostname: "+ get_ws_browser_hostname()) # TODO: remove after debugging
         if csv is True:
             return df_copy.to_csv(index=False)
 
@@ -123,11 +129,12 @@ def RepoScanner():
     with solara.Card("Scan Mounts in Repos"):
         solara.Info("Note: This will ignore mounts: DatabricksRoot, DbfsReserved, UnityCatalogVolumes, "
                     "databricks/mlflow-tracking, databricks-datasets, databricks/mlflow-registry, databricks-results.")
+        solara.Error(f"Error: {get_ws_url_string()}")
         solara.InputText("Repo Url", value=repo_url, on_value=set_repo_url)
         solara.InputText("User Name", value=user, on_value=set_user)
         solara.InputText("Token", value=token, on_value=set_token, password=True)
         solara.Button("Scan", style="margin-bottom: 25px", on_click=get_issues)
-        if error:
+        if error is not None and error != "":
             solara.Error("Error: " + error)
         if loading is True:
             solara.Info(f"Loading...")
