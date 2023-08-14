@@ -12,7 +12,7 @@ import pandas as pd
 from assessment.code_scanner.utils import get_dbutils
 
 # TODO: remove this hard coded value
-valid_prefix = "abfss"
+temp_valid_prefix = "abfss"
 
 
 @dataclass
@@ -80,6 +80,7 @@ def custom_mount_sort(mnt):
 @functools.lru_cache
 def get_mounts() -> List:
     return list(sorted(get_dbutils().fs.mounts(), key=custom_mount_sort))
+
 
 def mounts_iter(valid_prefix: str) -> Iterator[Mount]:
     for mnt in get_mounts():

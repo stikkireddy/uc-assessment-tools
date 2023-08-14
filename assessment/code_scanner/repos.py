@@ -1,9 +1,9 @@
-import subprocess
 import os
 import shutil
+import subprocess
+from contextlib import contextmanager
 
 import git
-from contextlib import contextmanager
 
 
 def set_git_user_for_commit(email, full_name):

@@ -99,7 +99,7 @@ class FileIssueSimpleResolver(IssueResolverStrategy):
 
     def filter_issues(self, issues: List[Issue]):
         # we can only handle file issues which are simple find and replace
-        return [issue for issue in issues if issue.issue_source.source_type == SourceType.FILE and \
+        return [issue for issue in issues if issue.issue_source.source_type == SourceType.FILE and
                 issue.issue_detail == "SIMPLE"]
 
     def _replace_content(self, file_path: str, issue_replace_mappings: List[IssueReplaceMapping]) -> io.StringIO:

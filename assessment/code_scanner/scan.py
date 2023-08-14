@@ -1,17 +1,21 @@
-import re
-import os
-from dataclasses import dataclass, asdict
-from typing import Iterator, TextIO, List, Dict, Optional, Tuple
-from abc import ABC, abstractmethod
-from pathlib import Path
-import pandas as pd
 import enum
-import json
 import io
+import json
+import os
 
+try:
+    import re2 as re
+except ImportError:
+    import re
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, asdict
+from pathlib import Path
+from typing import Iterator, TextIO, List, Dict, Optional, Tuple
+
+import pandas as pd
 from databricks.sdk import WorkspaceClient
 
-from assessment.code_scanner.mounts import mounts_iter, valid_prefix
+from assessment.code_scanner.mounts import mounts_iter, temp_valid_prefix
 
 
 class SourceType(enum.Enum):
@@ -109,7 +113,7 @@ def is_this_a_fuse_mount(match_value: str, line: str) -> bool:
     return False
 
 def get_exact_match(idx, line, issue_source: IssueSource) -> Optional[Issue]:
-    for mnt in mounts_iter(valid_prefix):
+    for mnt in mounts_iter(temp_valid_prefix):
         r, simple_match = mnt.find_simple_match(line)
         if simple_match is not None:
             if is_this_a_fuse_mount(simple_match, line):
