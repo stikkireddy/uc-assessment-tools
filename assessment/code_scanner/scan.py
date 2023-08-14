@@ -21,10 +21,10 @@ def in_dbx_notebook():
         ip_shell = IPython.get_ipython()
         if ip_shell is None:
             return False
-        dbutils = ip_shell.ns_table["user_global"]["dbutils"]
-        if dbutils is not None:
+        _dbutils = ip_shell.ns_table["user_global"]["dbutils"]
+        if _dbutils is not None:
             return True
-    except (ImportError, KeyError):
+    except (ImportError, KeyError, AttributeError):
         return False
 
     return False
@@ -36,10 +36,10 @@ def get_dbutils():
         ip_shell = IPython.get_ipython()
         if ip_shell is None:
             return False
-        dbutils = ip_shell.ns_table["user_global"]["dbutils"]
-        if dbutils is not None:
-            return dbutils
-    except (ImportError, KeyError):
+        _dbutils = ip_shell.ns_table["user_global"]["dbutils"]
+        if _dbutils is not None:
+            return _dbutils
+    except (ImportError, KeyError, AttributeError):
         pass
     # we are not in databricks and need testing
     dbutils = FakeDBUtils()

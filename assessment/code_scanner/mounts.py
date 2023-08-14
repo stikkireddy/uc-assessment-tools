@@ -4,7 +4,6 @@ from typing import Optional, List, Iterator, Tuple
 
 import pandas as pd
 
-
 # TODO: remove this hard coded value
 valid_prefix = "abfss"
 
@@ -27,6 +26,8 @@ class Mount:
     # TODO: Return directly an issue if found rather than a match or atleast issue type
     def find_simple_match(self, inp) -> Optional[Tuple[Optional[str], Optional[str]]]:
         for r in (self.simple or []):
+            if r is None or r == "":
+                continue
             res = self._r_search(r, inp)
             if res is not None:
                 return r, res
@@ -34,6 +35,8 @@ class Mount:
 
     def find_maybe_match(self, inp) -> Optional[Tuple[Optional[str], Optional[str]]]:
         for r in (self.maybe or []):
+            if r is None or r == "":
+                continue
             res = self._r_search(r, inp)
             if res is not None:
                 return r, res
@@ -42,6 +45,8 @@ class Mount:
     # TODO: Maybe we can indicate the protocol to indicate why it is cannot convert
     def find_cannot_convert_match(self, inp) -> Optional[Tuple[Optional[str], Optional[str]]]:
         for r in (self.cannot_convert or []):
+            if r is None or r == "":
+                continue
             res = self._r_search(r, inp)
             if res is not None:
                 return r, res
@@ -84,6 +89,11 @@ class FakeDBUtils:
 
 def mounts_iter(dbutils, valid_prefix: str) -> Iterator[Mount]:
     for mnt in dbutils.fs.mounts():
+        if mnt.source in [
+            "DatabricksRoot", "DbfsReserved", "UnityCatalogVolumes", "databricks/mlflow-tracking",
+            "databricks-datasets", "databricks/mlflow-registry"
+        ]:
+            continue
         if mnt.source.startswith(valid_prefix):
             simple, maybe = variations(mnt.mountPoint)
             yield Mount(target=mnt.source, raw_src=mnt.mountPoint,
@@ -93,9 +103,9 @@ def mounts_iter(dbutils, valid_prefix: str) -> Iterator[Mount]:
             yield Mount(target=mnt.source, raw_src=mnt.mountPoint,
                         is_mount_valid=False, cannot_convert=cannot_convert_2 + cannot_convert_1)
 
+
 def mounts_pdf(dbutils, valid_prefix: str) -> pd.DataFrame:
     return pd.DataFrame(mounts_iter(dbutils, valid_prefix))
-
 
 # if __name__ == "__main__":
 # dbutils = FakeDBUtils()
