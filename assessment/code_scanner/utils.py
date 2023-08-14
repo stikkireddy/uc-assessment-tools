@@ -37,6 +37,8 @@ def get_dbutils():
     # we are not in databricks and need testing
     dbutils = FakeDBUtils()
     dbutils.fs.fake_mounts = [
+        FakeMount(source="abfss://container@stoarge.windows.com/some_src", mountPoint="/mnt/source"),
+        FakeMount(source="abfss://container@stoarge.windows.com/some_dest", mountPoint="/mnt/destination"),
         FakeMount(source="abfss://container@stoarge.windows.com/some_location", mountPoint="/mnt/some_location"),
         FakeMount(source="wasbs://container@stoarge.windows.com/some_path", mountPoint="/mnt/some_other_location"),
         FakeMount(source="abfss://discovery@stoarge.windows.com/ml_discovery", mountPoint="/mnt/ADLS_Discovery/"),

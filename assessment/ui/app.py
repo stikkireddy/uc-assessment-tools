@@ -115,7 +115,6 @@ def RepoScanner():
                     # this identifies all the issues in the repo
                     set_issues(scan.to_df())
         except Exception as e:
-            print(e)
             set_error(str(e))
         finally:
             set_loading(False)
@@ -133,10 +132,11 @@ def RepoScanner():
             solara.Info(f"Loading...")
             solara.ProgressLinear(True)
         elif issues is not None:
-            solara.FileDownload(label="Download Issues Parquet", filename="issues.parquet",
-                                data=lambda: get_raw_data(csv=False))
-            solara.FileDownload(label="Download Issues CSV", filename="issues.csv",
-                                data=lambda: get_raw_data(csv=True))
+            with solara.Row():
+                solara.FileDownload(label="Download Issues Parquet", filename="issues.parquet",
+                                    data=lambda: get_raw_data(csv=False))
+                solara.FileDownload(label="Download Issues CSV", filename="issues.csv",
+                                    data=lambda: get_raw_data(csv=True))
             with solara.lab.Tabs():
                 with solara.lab.Tab("Raw Data"):
                     solara.DataFrame(issues)
