@@ -11,46 +11,8 @@ import io
 
 from databricks.sdk import WorkspaceClient
 
-from assessment.code_scanner.mounts import mounts_iter, valid_prefix, FakeDBUtils, FakeMount
+from assessment.code_scanner.mounts import mounts_iter, valid_prefix
 
-
-def in_dbx_notebook():
-    try:
-        import IPython
-
-        ip_shell = IPython.get_ipython()
-        if ip_shell is None:
-            return False
-        _dbutils = ip_shell.ns_table["user_global"]["dbutils"]
-        if _dbutils is not None:
-            return True
-    except (ImportError, KeyError, AttributeError):
-        return False
-
-    return False
-
-
-def get_dbutils():
-    try:
-        import IPython
-        ip_shell = IPython.get_ipython()
-        if ip_shell is None:
-            return False
-        _dbutils = ip_shell.ns_table["user_global"]["dbutils"]
-        if _dbutils is not None:
-            return _dbutils
-    except (ImportError, KeyError, AttributeError):
-        pass
-    # we are not in databricks and need testing
-    dbutils = FakeDBUtils()
-    dbutils.fs.fake_mounts = [
-        FakeMount(source="abfss://container@stoarge.windows.com/some_location", mountPoint="/mnt/some_location"),
-        FakeMount(source="wasbs://container@stoarge.windows.com/some_path", mountPoint="/mnt/some_other_location"),
-        FakeMount(source="abfss://discovery@stoarge.windows.com/ml_discovery", mountPoint="/mnt/ADLS_Discovery/"),
-        FakeMount(source="abfss://ADLS_MLOps@stoarge.windows.com/some_mlops", mountPoint="/mnt/ADLS_MLOps"),
-        # blob not possbile to migrate
-    ]
-    return dbutils
 
 class SourceType(enum.Enum):
     CLUSTER_JSON = "CLUSTER_JSON"
@@ -166,7 +128,7 @@ def generate_issues(content: TextIO, issue_regexprs: Dict[str, IssueInfo],
         # if not then scan through all the regexes
         # TODO: valid prefix is different between clouds
         fount_mount_exact_match = False
-        for mnt in mounts_iter(get_dbutils(), valid_prefix):
+        for mnt in mounts_iter(valid_prefix):
             r, simple_match = mnt.find_simple_match(line)
             if simple_match is not None:
                 if is_this_a_fuse_mount(simple_match, line):

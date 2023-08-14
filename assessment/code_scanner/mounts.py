@@ -1,8 +1,11 @@
+import functools
 import re
 from dataclasses import dataclass
 from typing import Optional, List, Iterator, Tuple
 
 import pandas as pd
+
+from assessment.code_scanner.utils import get_dbutils
 
 # TODO: remove this hard coded value
 valid_prefix = "abfss"
@@ -66,29 +69,12 @@ def variations(mnt_path):
     ]
 
 
-@dataclass
-class FakeMount:
-    source: str
-    mountPoint: str
+@functools.lru_cache
+def get_mounts() -> List:
+    return get_dbutils().fs.mounts()
 
-
-class FakeFS:
-
-    def __init__(self):
-        self.fake_mounts = []
-
-    def mounts(self) -> List[FakeMount]:
-        return self.fake_mounts
-
-
-class FakeDBUtils:
-
-    def __init__(self):
-        self.fs = FakeFS()
-
-
-def mounts_iter(dbutils, valid_prefix: str) -> Iterator[Mount]:
-    for mnt in dbutils.fs.mounts():
+def mounts_iter(valid_prefix: str) -> Iterator[Mount]:
+    for mnt in get_mounts():
         if mnt.source in [
             "DatabricksRoot", "DbfsReserved", "UnityCatalogVolumes", "databricks/mlflow-tracking",
             "databricks-datasets", "databricks/mlflow-registry", "databricks-results"
@@ -104,8 +90,8 @@ def mounts_iter(dbutils, valid_prefix: str) -> Iterator[Mount]:
                         is_mount_valid=False, cannot_convert=cannot_convert_2 + cannot_convert_1)
 
 
-def mounts_pdf(dbutils, valid_prefix: str) -> pd.DataFrame:
-    return pd.DataFrame(mounts_iter(dbutils, valid_prefix))
+def mounts_pdf(valid_prefix: str) -> pd.DataFrame:
+    return pd.DataFrame(mounts_iter(valid_prefix))
 
 # if __name__ == "__main__":
 # dbutils = FakeDBUtils()

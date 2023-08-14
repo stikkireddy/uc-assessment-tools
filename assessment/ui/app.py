@@ -8,7 +8,7 @@ import solara.lab
 
 from assessment.code_scanner.mounts import mounts_pdf
 from assessment.code_scanner.repos import git_repo
-from assessment.code_scanner.scan import get_dbutils, LocalFSCodeStrategy
+from assessment.code_scanner.scan import LocalFSCodeStrategy
 from assessment.code_scanner.utils import get_ws_client
 
 
@@ -22,7 +22,7 @@ def MountScanner():
 
     def get_mounts():
         set_loading(True)
-        mounts_pd = mounts_pdf(get_dbutils(), "abfss")
+        mounts_pd = mounts_pdf("abfss")
         set_mounts(mounts_pd)
         set_loading(False)
 
