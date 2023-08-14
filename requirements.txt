@@ -1,0 +1,4 @@
+databricks-sdk>=0.4.0
+gitpython
+pandas
+solara
