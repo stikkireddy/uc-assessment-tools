@@ -91,7 +91,7 @@ def mounts_iter(dbutils, valid_prefix: str) -> Iterator[Mount]:
     for mnt in dbutils.fs.mounts():
         if mnt.source in [
             "DatabricksRoot", "DbfsReserved", "UnityCatalogVolumes", "databricks/mlflow-tracking",
-            "databricks-datasets", "databricks/mlflow-registry"
+            "databricks-datasets", "databricks/mlflow-registry", "databricks-results"
         ]:
             continue
         if mnt.source.startswith(valid_prefix):

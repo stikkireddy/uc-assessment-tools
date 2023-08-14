@@ -27,8 +27,8 @@ def MountScanner():
         set_loading(False)
 
     with solara.Card("Download Mounts Info"):
-        solara.Info("Note: This will ignore mounts:  DatabricksRoot, DbfsReserved, UnityCatalogVolumes, "
-                    "databricks/mlflow-tracking, databricks-datasets, databricks/mlflow-registry.")
+        solara.Info("Note: This will ignore mounts: DatabricksRoot, DbfsReserved, UnityCatalogVolumes, "
+                    "databricks/mlflow-tracking, databricks-datasets, databricks/mlflow-registry, databricks-results.")
         solara.Button("Load Mounts", on_click=get_mounts, style="margin-bottom: 25px")
         if loading is True:
             solara.Info(f"Loading...")
@@ -82,8 +82,8 @@ def RepoScanner():
             set_loading(False)
 
     with solara.Card("Scan Mounts in Repos"):
-        solara.Info("Note: This will ignore mounts:  DatabricksRoot, DbfsReserved, UnityCatalogVolumes, "
-                    "databricks/mlflow-tracking, databricks-datasets, databricks/mlflow-registry.")
+        solara.Info("Note: This will ignore mounts: DatabricksRoot, DbfsReserved, UnityCatalogVolumes, "
+                    "databricks/mlflow-tracking, databricks-datasets, databricks/mlflow-registry, databricks-results.")
         solara.InputText("Repo Url", value=repo_url, on_value=set_repo_url)
         solara.InputText("User Name", value=user, on_value=set_user)
         solara.InputText("Token", value=token, on_value=set_token, password=True)
