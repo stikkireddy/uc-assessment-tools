@@ -1,4 +1,8 @@
 # Databricks notebook source
+# MAGIC %sh
+# MAGIC sudo apt install -y libre2-dev pybind11-dev
+
+# COMMAND ----------
 
 # MAGIC %pip install git+https://github.com/stikkireddy/uc-assessment-tools.git@main
 
