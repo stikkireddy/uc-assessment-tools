@@ -15,25 +15,42 @@ from assessment.code_scanner.mounts import mounts_iter, valid_prefix, FakeDBUtil
 
 
 def in_dbx_notebook():
-    if "dbutils" in globals():
-        return True
+    try:
+        import IPython
+
+        ip_shell = IPython.get_ipython()
+        if ip_shell is None:
+            return False
+        dbutils = ip_shell.ns_table["user_global"]["dbutils"]
+        if dbutils is not None:
+            return True
+    except (ImportError, KeyError):
+        return False
+
     return False
 
 
 def get_dbutils():
-    if "dbutils" in globals():
-        return globals()["dbutils"]
-    else:
-        # we are not in databricks and need testing
-        dbutils = FakeDBUtils()
-        dbutils.fs.fake_mounts = [
-            FakeMount(source="abfss://container@stoarge.windows.com/some_location", mountPoint="/mnt/some_location"),
-            FakeMount(source="wasbs://container@stoarge.windows.com/some_path", mountPoint="/mnt/some_other_location"),
-            FakeMount(source="abfss://discovery@stoarge.windows.com/ml_discovery", mountPoint="/mnt/ADLS_Discovery/"),
-            FakeMount(source="abfss://ADLS_MLOps@stoarge.windows.com/some_mlops", mountPoint="/mnt/ADLS_MLOps"),
-            # blob not possbile to migrate
-        ]
-        return dbutils
+    try:
+        import IPython
+        ip_shell = IPython.get_ipython()
+        if ip_shell is None:
+            return False
+        dbutils = ip_shell.ns_table["user_global"]["dbutils"]
+        if dbutils is not None:
+            return dbutils
+    except (ImportError, KeyError):
+        pass
+    # we are not in databricks and need testing
+    dbutils = FakeDBUtils()
+    dbutils.fs.fake_mounts = [
+        FakeMount(source="abfss://container@stoarge.windows.com/some_location", mountPoint="/mnt/some_location"),
+        FakeMount(source="wasbs://container@stoarge.windows.com/some_path", mountPoint="/mnt/some_other_location"),
+        FakeMount(source="abfss://discovery@stoarge.windows.com/ml_discovery", mountPoint="/mnt/ADLS_Discovery/"),
+        FakeMount(source="abfss://ADLS_MLOps@stoarge.windows.com/some_mlops", mountPoint="/mnt/ADLS_MLOps"),
+        # blob not possbile to migrate
+    ]
+    return dbutils
 
 class SourceType(enum.Enum):
     CLUSTER_JSON = "CLUSTER_JSON"
