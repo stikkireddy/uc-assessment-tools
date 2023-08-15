@@ -1,6 +1,7 @@
 import io
 import os
 import tempfile
+import time
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -12,7 +13,7 @@ import solara.lab
 
 from assessment.code_scanner.mounts import mounts_pdf
 from assessment.code_scanner.repos import git_repo
-from assessment.code_scanner.scan import LocalFSCodeStrategy
+from assessment.code_scanner.scan import LocalFSCodeStrategy, Issue
 from assessment.code_scanner.utils import get_ws_client, get_ws_browser_hostname, change_log_filename, log, LOGS_FOLDER
 
 workspace_url = get_ws_browser_hostname() or get_ws_client(default_profile="uc-assessment-azure").config.host
@@ -57,10 +58,13 @@ def MountScanner():
 def RepoScanner():
     issues, set_issues = solara.use_state(None)
     loading, set_loading = solara.use_state(False)
+    max_progress, set_max_progress = solara.use_state(0)
+    progress, set_progress = solara.use_state(0)
     error, set_error = solara.use_state("")
     repo_url, set_repo_url = solara.use_state("")
     user, set_user = solara.use_state("")
     token, set_token = solara.use_state("")
+    curr_file, set_curr_file = solara.use_state("")
 
     issues: pd.DataFrame
     set_issues: Callable[[pd.DataFrame], None]
@@ -94,10 +98,6 @@ def RepoScanner():
             set_error("Please enter a repo url")
             return
         set_error("")
-        if user is not None and user != "" and token is not None and token != "":
-            built_repo_url = repo_url.replace("https://", f"https://{user}:{token}@")
-        else:
-            built_repo_url = repo_url
         try:
             set_loading(True)
             ws_client = get_ws_client(default_profile="uc-assessment-azure")
@@ -105,11 +105,17 @@ def RepoScanner():
             user_name = curr_user.display_name
             email = curr_user.user_name
             with tempfile.TemporaryDirectory() as path:
-                with git_repo(built_repo_url, None, path, email=email, full_name=user_name, delete=True):
-                    print("Inside the context manager")
-                    scan = LocalFSCodeStrategy([Path(path)])
+                with git_repo(repo_url, None, path, email=email, full_name=user_name, delete=True,
+                              username=user, password=token):
+                    scan = LocalFSCodeStrategy([Path(path)],
+                                               set_curr_file=set_curr_file,
+                                               set_max_prog=set_max_progress,
+                                               set_curr_prog=set_progress)
                     # this identifies all the issues in the repo
-                    set_issues(scan.to_df())
+                    _issues = []
+                    for iss in scan.iter_issues():
+                        _issues.append(iss)
+                    set_issues(Issue.issues_to_df(_issues))
         except Exception as e:
             set_error(str(e))
         finally:
@@ -125,8 +131,12 @@ def RepoScanner():
         if error is not None and error != "":
             solara.Error("Error: " + error)
         if loading is True:
-            solara.Info(f"Loading...")
-            solara.ProgressLinear(True)
+            solara.Info(f"Loading... Current File: {curr_file} "
+                        f"Progress: {progress}/{max_progress} files scanned")
+            if max_progress > 0 and progress > 0:
+                solara.ProgressLinear((progress/max_progress) * 100)
+            else:
+                solara.ProgressLinear(True)
         elif issues is not None:
             with solara.Row():
                 solara.FileDownload(label="Download Issues Parquet", filename="issues.parquet",

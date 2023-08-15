@@ -104,14 +104,3 @@ def mounts_iter(valid_prefix: str) -> Iterator[Mount]:
 def mounts_pdf(valid_prefix: str) -> pd.DataFrame:
     return pd.DataFrame(mounts_iter(valid_prefix))
 
-# if __name__ == "__main__":
-# dbutils = FakeDBUtils()
-# dbutils.fs.fake_mounts = [
-#     FakeMounts(source="abfss://container@stoarge.windows.com", mountPoint="/mnt/some_location"),
-# ]
-# # for mount in dbutils.fs.mounts():
-# #     print(mount)
-# for mnt in mounts_iter(dbutils, valid_prefix):
-#     print(mnt.find_simple_match("dbfs:/mnt/some_location/someotherpath"))
-
-# for mnt in mounts_iter(fake, valid_prefix):

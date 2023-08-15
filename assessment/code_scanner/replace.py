@@ -78,7 +78,6 @@ class IssueResolverStrategy(ABC):
     def search_issue_replace_mapping(issue: Issue, issue_replace_mappings: List[IssueReplaceMapping]):
         for issue_replace_mapping in issue_replace_mappings:
             if issue_replace_mapping.matching_regex == issue.matched_regex:
-                print(issue_replace_mapping, issue)
                 return issue_replace_mapping
         return None
 

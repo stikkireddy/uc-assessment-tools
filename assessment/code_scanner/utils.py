@@ -121,20 +121,6 @@ def create_file_handler(log_file):
     return file_handler
 
 
-# class CustomTimeFormatter(logging.Formatter):
-#     converter = datetime.fromtimestamp
-#
-#     def formatTime(self, record, datefmt=None):
-#         ct = self.converter(record.created)
-#         if datefmt:
-#             s = ct.strftime(datefmt)
-#         else:
-#             t = ct.strftime("%Y-%m-%d %H:%M:%S %Z")
-#             parts = t.split(" ")
-#             s = "%s %s.%03d %s" % (parts[0], parts[1], record.msecs, parts[2])
-#         return s
-
-
 def set_up_formatter(handler):
     logging.Formatter.converter = time.gmtime
     formatter = logging.Formatter(

@@ -12,7 +12,7 @@ except ImportError:
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Iterator, TextIO, List, Dict, Optional, Tuple
+from typing import Iterator, TextIO, List, Dict, Optional, Tuple, Union, Callable
 
 import pandas as pd
 from databricks.sdk import WorkspaceClient
@@ -55,7 +55,7 @@ class Issue:
     matched_value: Optional[str] = None
 
     @staticmethod
-    def issues_to_df(issues: Iterator['Issue']) -> pd.DataFrame:
+    def issues_to_df(issues: Union[Iterator['Issue'], List['Issue']]) -> pd.DataFrame:
         issues = [asdict(issue, dict_factory=enum_to_string_factory) for issue in issues]
         if len(issues) > 0:
             return pd.DataFrame(issues)
@@ -217,17 +217,31 @@ class CodeStrategy(ABC):
 
 class LocalFSCodeStrategy(CodeStrategy):
 
-    def __init__(self, directories: List[Path]):
+    def __init__(self, directories: List[Path],
+                 set_max_prog: Callable[[int], None] = None,
+                 set_curr_prog: Callable[[int], None] = None,
+                 set_curr_file: Callable[[str], None] = None
+                 ):
+        self.set_curr_file = set_curr_file
+        self.set_curr_prog = set_curr_prog
+        self.set_max_prog = set_max_prog
         self.directories = directories
+
 
     @staticmethod
     def get_path(src: IssueSource) -> str:
         return src.source_metadata.get("file_path")
 
     def iter_content(self):
+        max_prog = 0
+        curr_prog = 0
         for code_dir in self.directories:
             code_dir_with_suffix = str(code_dir).rstrip("/") + "/"
             for root, dirs, files in os.walk(str(code_dir)):
+                if self.set_max_prog is not None:
+                    self.set_max_prog(max_prog + len(files))
+                    max_prog += len(files)
+
                 if '.git' in dirs:
                     dirs.remove('.git')
                 for file in files:
@@ -240,7 +254,17 @@ class LocalFSCodeStrategy(CodeStrategy):
                         }), fp
                     except (OSError, UnicodeDecodeError):
                         log.error(f"Unable to open file {file_path}")
-
+                    finally:
+                        if self.set_curr_prog is not None:
+                            curr_prog += 1
+                            self.set_curr_prog(curr_prog)
+                        if self.set_curr_file is not None:
+                            self.set_curr_file(file_path.replace(code_dir_with_suffix, ""))
+        # end
+        if self.set_curr_file is not None:
+            self.set_curr_file("")
+            self.set_max_prog(0)
+            self.set_curr_prog(0)
 
 class TestingCodeStrategyClusters(CodeStrategy):
 
