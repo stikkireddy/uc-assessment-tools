@@ -89,7 +89,6 @@ def RepoScanner():
         fig.update_traces(marker=dict(colors=color_scale))
         return fig
 
-
     def get_issues():
         if repo_url is None or repo_url == "":
             set_error("Please enter a repo url")
@@ -149,6 +148,7 @@ def make_logger_file_name(timestamp: str = None):
 def FileBrowser(exec_base_path, exclude_prefixes: List[str] = None):
     file, set_file = solara.use_state(cast(Optional[Path], None))
     path, set_path = solara.use_state(cast(Optional[Path], None))
+    file_content, set_file_content = solara.use_state(cast(Optional[str], None))
     # directory, set_directory = solara.use_state(EXECUTION_BASE_PATH)
     EXECUTION_BASE_PATH = Path(exec_base_path).resolve()
     directory = solara.use_reactive(EXECUTION_BASE_PATH)
@@ -157,12 +157,6 @@ def FileBrowser(exec_base_path, exclude_prefixes: List[str] = None):
     exclude_prefixes = exclude_prefixes or []
 
     with solara.Column():
-        # can_select = solara.ui_checkbox("Enable select")
-
-        # def reset_path():
-        #     set_path(None)
-        #     set_file(None)
-
         def filter_path(p: Path) -> bool:
             if any([str(p).startswith(prefix) for prefix in exclude_prefixes]):
                 return False
@@ -217,9 +211,18 @@ def FileBrowser(exec_base_path, exclude_prefixes: List[str] = None):
                 zf.close()
                 return zip_buffer
 
+        def last_10000_lines(p):
+            with open(p, "r") as f:
+                lines = f.readlines()
+                return "".join(lines[-10000:])
+
         def on_path_select(p: Path) -> None:
             if str(p).startswith(str(EXECUTION_BASE_PATH)):
                 set_path(p)
+                try:
+                    set_file_content(last_10000_lines(p))
+                except Exception as e:
+                    print(f"Error reading file: {e}")
                 message.value = None
 
         def zip_bytes(input_bytes, file_name):
@@ -231,11 +234,23 @@ def FileBrowser(exec_base_path, exclude_prefixes: List[str] = None):
             compressed_bytes = output_buffer.getvalue()
             return compressed_bytes
 
+        def empty_file(file_path):
+            try:
+                with open(file_path, 'w') as f:
+                    f.truncate(0)
+                set_file_content("")
+                print(f"Contents of '{file_path}' have been emptied.")
+            except Exception as e:
+                print(f"Error emptying file '{file_path}': {e}")
+
         if path is not None and path.is_file():
             solara.Info(f"You selected file for download: {path}")
             # must be lambda otherwise will always try to download
-            solara.FileDownload(lambda: zip_bytes(path.open("rb").read(), path.name), path.name+".zip",
-                                label=f"Download {path.name}")
+            with solara.HBox():
+                solara.FileDownload(lambda: zip_bytes(path.open("rb").read(), path.name), path.name + ".zip",
+                                    label=f"Download {path.name}.zip")
+                solara.Button(f"Clear Logs {path.name}", on_click=lambda: empty_file(str(path)),
+                              style="margin-left: 25px")
 
         if path is not None and path.is_dir():
             file_ct = count_dir()
@@ -248,13 +263,8 @@ def FileBrowser(exec_base_path, exclude_prefixes: List[str] = None):
                 solara.FileDownload(lambda: download_dir(), zip_name, label=f"Download {file_ct} files in "
                                                                             f"{zip_name}")
 
-        def last_10000_lines(p):
-            with open(p, "r") as f:
-                lines = f.readlines()
-                return "".join(lines[-10000:])
-
         with solara.lab.Tabs():
-            with solara.lab.Tab("File Browser"):
+            with solara.lab.Tab("Log File Browser"):
                 solara.FileBrowser(
                     directory,
                     filter=filter_path,
@@ -265,8 +275,9 @@ def FileBrowser(exec_base_path, exclude_prefixes: List[str] = None):
             if path is not None:
                 with solara.lab.Tab("Log Viewer"):
                     with solara.VBox():
-                        with solara.Card(f"Logs: {path}", style="max-height: 500px; overflow: scroll;"):
-                            solara.Markdown("```"+last_10000_lines(path)+"```", style="max-width: 100%;")
+                        with solara.Card(f"Last 10k Logs: {path}", style="max-height: 500px; overflow: scroll;"):
+                            solara.Markdown("```" + (file_content or "\n") + "```", style="max-width: 100%;")
+
 
 @solara.component
 def Page():
@@ -282,6 +293,5 @@ def Page():
                 MountScanner()
             with solara.lab.Tab(label="Repo Scanner"):
                 RepoScanner()
-            with solara.lab.Tab(label="Download Logs"):
+            with solara.lab.Tab(label="Manage Logs"):
                 FileBrowser("logs")
-
