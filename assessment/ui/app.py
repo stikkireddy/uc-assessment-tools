@@ -275,8 +275,12 @@ def FileBrowser(exec_base_path, exclude_prefixes: List[str] = None):
             if path is not None:
                 with solara.lab.Tab("Log Viewer"):
                     with solara.VBox():
-                        with solara.Card(f"Last 10k Logs: {path}", style="max-height: 500px; overflow: scroll;"):
-                            solara.Markdown("```" + (file_content or "\n") + "```", style="max-width: 100%;")
+                        with solara.Card(f"Last 10k Logs: {path}"):
+                            solara.Button(f"Refresh", on_click=lambda: set_file_content(last_10000_lines(path)),
+                                          style="margin-left: 25px; margin-bottom: 25px")
+                            solara.Markdown("```" + (file_content or "\n") + "```", style="max-width: 100%; "
+                                                                                          "max-height: 500px; "
+                                                                                          "overflow: scroll;")
 
 
 @solara.component
