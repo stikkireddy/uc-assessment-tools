@@ -90,11 +90,13 @@ class FakeFS:
         return self.fake_mounts
 
 
+LOGS_FOLDER = "logs/uc-assessment"
+
+
 def setup_logger(log_file):
     # Create the logs folder if it doesn't exist
-    logs_folder = "logs"
-    if not os.path.exists(logs_folder):
-        os.makedirs(logs_folder)
+    if not os.path.exists(LOGS_FOLDER):
+        os.makedirs(LOGS_FOLDER)
 
     # Create a logger
     logger = logging.getLogger('assessment')
@@ -111,8 +113,7 @@ def setup_logger(log_file):
 
 
 def create_file_handler(log_file):
-    logs_folder = "logs"
-    log_file_path = os.path.join(logs_folder, log_file)
+    log_file_path = os.path.join(LOGS_FOLDER, log_file)
 
     file_handler = logging.FileHandler(log_file_path)
     file_handler.setLevel(logging.DEBUG)

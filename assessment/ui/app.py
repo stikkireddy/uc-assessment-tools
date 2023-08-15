@@ -13,7 +13,7 @@ import solara.lab
 from assessment.code_scanner.mounts import mounts_pdf
 from assessment.code_scanner.repos import git_repo
 from assessment.code_scanner.scan import LocalFSCodeStrategy
-from assessment.code_scanner.utils import get_ws_client, get_ws_browser_hostname, change_log_filename, log
+from assessment.code_scanner.utils import get_ws_client, get_ws_browser_hostname, change_log_filename, log, LOGS_FOLDER
 
 workspace_url = get_ws_browser_hostname() or get_ws_client(default_profile="uc-assessment-azure").config.host
 
@@ -298,4 +298,4 @@ def Page():
             with solara.lab.Tab(label="Repo Scanner"):
                 RepoScanner()
             with solara.lab.Tab(label="Manage Logs"):
-                FileBrowser("logs")
+                FileBrowser(LOGS_FOLDER)
