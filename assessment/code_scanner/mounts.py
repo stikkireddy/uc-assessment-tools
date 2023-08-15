@@ -9,7 +9,7 @@ from typing import Optional, List, Iterator, Tuple
 
 import pandas as pd
 
-from assessment.code_scanner.utils import get_dbutils
+from assessment.code_scanner.utils import get_dbutils, log
 
 # TODO: remove this hard coded value
 temp_valid_prefix = "abfss"
@@ -88,6 +88,7 @@ def mounts_iter(valid_prefix: str) -> Iterator[Mount]:
             "DatabricksRoot", "DbfsReserved", "UnityCatalogVolumes", "databricks/mlflow-tracking",
             "databricks-datasets", "databricks/mlflow-registry", "databricks-results"
         ]:
+            log.info("Found mount with reserved source: %s", mnt.source)
             continue
         if mnt.source.startswith(valid_prefix):
             simple, maybe = variations(mnt.mountPoint)
@@ -95,6 +96,7 @@ def mounts_iter(valid_prefix: str) -> Iterator[Mount]:
                         is_mount_valid=True, simple=simple, maybe=maybe)
         else:
             cannot_convert_1, cannot_convert_2 = variations(mnt.mountPoint)
+            log.info("Found mount with invalid source: %s", mnt.source)
             yield Mount(target=mnt.source, raw_src=mnt.mountPoint,
                         is_mount_valid=False, cannot_convert=cannot_convert_2 + cannot_convert_1)
 
@@ -102,14 +104,3 @@ def mounts_iter(valid_prefix: str) -> Iterator[Mount]:
 def mounts_pdf(valid_prefix: str) -> pd.DataFrame:
     return pd.DataFrame(mounts_iter(valid_prefix))
 
-# if __name__ == "__main__":
-# dbutils = FakeDBUtils()
-# dbutils.fs.fake_mounts = [
-#     FakeMounts(source="abfss://container@stoarge.windows.com", mountPoint="/mnt/some_location"),
-# ]
-# # for mount in dbutils.fs.mounts():
-# #     print(mount)
-# for mnt in mounts_iter(dbutils, valid_prefix):
-#     print(mnt.find_simple_match("dbfs:/mnt/some_location/someotherpath"))
-
-# for mnt in mounts_iter(fake, valid_prefix):

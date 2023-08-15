@@ -4,6 +4,7 @@
 
 # COMMAND ----------
 
+# MAGIC %pip install pyre2
 # MAGIC %pip install git+https://github.com/stikkireddy/uc-assessment-tools.git@main
 
 # COMMAND ----------

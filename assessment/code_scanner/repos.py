@@ -5,6 +5,8 @@ from contextlib import contextmanager
 
 import git
 
+from assessment.code_scanner.utils import log
+
 
 def set_git_user_for_commit(email, full_name):
     # Set user email and name configurations
@@ -22,15 +24,24 @@ def git_repo(repo_url,
              path,
              email,
              full_name,
-             delete=False):
+             delete=False,
+             username=None,
+             password=None):
+    if username is not None and username != "" and password is not None and password != "":
+        built_repo_url = repo_url.replace("https://", f"https://{username}:{password}@")
+    else:
+        built_repo_url = repo_url
+
+    log.info(f"Cloning repo {repo_url} to {path}; branch: {branch}; delete: {delete}; username: {username};")
+
     # Clean up the path if it exists
     if path and os.path.exists(path):
         shutil.rmtree(path)
 
     # Clone the repo's main branch
-    repo = git.Repo.clone_from(repo_url, path)
+    repo = git.Repo.clone_from(built_repo_url, path)
 
-    print(f"Repository cloned to {path}")
+    log.info(f"Repository cloned to {path}")
 
     try:
         if delete and branch:
@@ -38,13 +49,13 @@ def git_repo(repo_url,
             remote = repo.remote()
             try:
                 remote.push(refspec=f":{branch}")
-                print(f"Remote branch {branch} deleted.")
+                log.info(f"Remote branch {branch} deleted.")
             except git.exc.GitCommandError:
-                print(f"Remote branch {branch} doesn't exist.")
+                log.info(f"Remote branch {branch} doesn't exist.")
 
         # If branch is provided, create and switch to the new branch
         if branch:
-            print(f"Branch: {branch} provided. Checking out.")
+            log.info(f"Branch: {branch} provided. Checking out.")
             remote_branch_exists = False
             remote = repo.remote()
             for ref in remote.refs:
@@ -53,14 +64,14 @@ def git_repo(repo_url,
                     break
 
             if remote_branch_exists:
-                print("Branch already exists. Checking out.")
+                log.info("Branch already exists. Checking out.")
                 repo.git.checkout(branch)
             else:
-                print("Branch doesn't exist. Creating and checking out.")
+                log.info("Branch doesn't exist. Creating and checking out.")
                 new_branch = repo.create_head(branch)
                 repo.head.reference = new_branch
         else:
-            print("No branch provided. Using the main branch.")
+            log.info("No branch provided. Using the main branch.")
 
         yield repo
 
@@ -74,8 +85,8 @@ def git_repo(repo_url,
             repo.remotes["origin"].push(branch)
             repo.git.branch("--set-upstream-to", f"origin/{branch}", branch)
             repo.git.push()
-            print("Changes committed and pushed.")
+            log.info("Changes committed and pushed.")
         else:
-            print(f"No changes to commit for branch: {branch}.")
+            log.info(f"No changes to commit for branch: {branch}.")
 
         repo.close()

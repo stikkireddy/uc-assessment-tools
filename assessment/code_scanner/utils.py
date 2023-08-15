@@ -1,4 +1,7 @@
 import json
+import logging
+import os
+import time
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -8,7 +11,7 @@ from databricks.sdk import WorkspaceClient
 def get_ws_browser_hostname() -> Optional[str]:
     if in_dbx_notebook():
         _dbutils = get_dbutils()
-        return json.loads(_dbutils.notebook.entry_point.getDbutils().notebook().getContext().toJson()).get("tags", {})\
+        return json.loads(_dbutils.notebook.entry_point.getDbutils().notebook().getContext().toJson()).get("tags", {}) \
             .get("browserHostName")
 
     return None
@@ -85,3 +88,61 @@ class FakeFS:
 
     def mounts(self) -> List[FakeMount]:
         return self.fake_mounts
+
+
+LOGS_FOLDER = "logs/uc-assessment"
+
+
+def setup_logger(log_file):
+    # Create the logs folder if it doesn't exist
+    if not os.path.exists(LOGS_FOLDER):
+        os.makedirs(LOGS_FOLDER)
+
+    # Create a logger
+    logger = logging.getLogger('assessment')
+    logger.setLevel(logging.DEBUG)
+
+    # Create a file handler and set up the formatter
+    file_handler = create_file_handler(log_file)
+    set_up_formatter(file_handler)
+
+    # Add the handler to the logger
+    logger.addHandler(file_handler)
+
+    return logger
+
+
+def create_file_handler(log_file):
+    log_file_path = os.path.join(LOGS_FOLDER, log_file)
+
+    file_handler = logging.FileHandler(log_file_path)
+    file_handler.setLevel(logging.DEBUG)
+
+    return file_handler
+
+
+def set_up_formatter(handler):
+    logging.Formatter.converter = time.gmtime
+    formatter = logging.Formatter(
+        "[%(asctime)s.%(msecs)03d UTC] [%(levelname)s] {%(module)s.py:%(funcName)s:%(lineno)d} - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    handler.setFormatter(formatter)
+
+
+def change_log_filename(logger, new_log_file):
+    # Remove existing handlers from the logger
+    for handler in logger.handlers:
+        logger.removeHandler(handler)
+
+    # Create a new file handler with the updated log filename
+    file_handler = create_file_handler(new_log_file)
+
+    # Set up the formatter for the new handler
+    set_up_formatter(file_handler)
+
+    # Add the new handler to the logger
+    logger.addHandler(file_handler)
+
+
+log = setup_logger("default_logs.txt")
