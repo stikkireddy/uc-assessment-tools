@@ -3,6 +3,8 @@ import io
 import json
 import os
 
+from assessment.code_scanner.utils import log
+
 try:
     import re2 as re
 except ImportError:
@@ -57,7 +59,8 @@ class Issue:
         issues = [asdict(issue, dict_factory=enum_to_string_factory) for issue in issues]
         if len(issues) > 0:
             return pd.DataFrame(issues)
-        return pd.DataFrame(columns=["issue_type", "issue_detail", "issue_source", "line_number", "matched_regex",])
+        return pd.DataFrame(columns=["issue_type", "issue_detail", "issue_source", "line_number", "matched_regex", ])
+
 
 @dataclass
 class IssueInfo:
@@ -114,6 +117,7 @@ def is_this_a_fuse_mount(match_value: str, line: str) -> bool:
         return True
     return False
 
+
 def get_exact_match(idx, line, issue_source: IssueSource) -> Optional[Issue]:
     for mnt in mounts_iter(temp_valid_prefix):
         r, simple_match = mnt.find_simple_match(line)
@@ -125,28 +129,29 @@ def get_exact_match(idx, line, issue_source: IssueSource) -> Optional[Issue]:
             else:
                 issue_detail = "SIMPLE"
             return Issue(line_number=int(idx) + 1, matched_regex=r,
-                        matched_value=simple_match,
-                        matched_line=line.strip(),
-                        issue_source=issue_source,
-                        issue_type="MATCHING_MOUNT_USE",
-                        issue_detail=issue_detail)
+                         matched_value=simple_match,
+                         matched_line=line.strip(),
+                         issue_source=issue_source,
+                         issue_type="MATCHING_MOUNT_USE",
+                         issue_detail=issue_detail)
         r, maybe_match = mnt.find_maybe_match(line)
         if maybe_match is not None:
             return Issue(line_number=int(idx) + 1, matched_regex=r,
-                        matched_value=maybe_match,
-                        matched_line=line.strip(),
-                        issue_source=issue_source,
-                        issue_type="MATCHING_MOUNT_USE",
-                        issue_detail="MAYBE")
+                         matched_value=maybe_match,
+                         matched_line=line.strip(),
+                         issue_source=issue_source,
+                         issue_type="MATCHING_MOUNT_USE",
+                         issue_detail="MAYBE")
         r, cannot_convert_match = mnt.find_cannot_convert_match(line)
         if cannot_convert_match is not None:
             return Issue(line_number=int(idx) + 1, matched_regex=r,
-                        matched_value=cannot_convert_match,
-                        matched_line=line.strip(),
-                        issue_source=issue_source,
-                        issue_type="MATCHING_MOUNT_USE",
-                        issue_detail="CANNOT_CONVERT")
+                         matched_value=cannot_convert_match,
+                         matched_line=line.strip(),
+                         issue_source=issue_source,
+                         issue_type="MATCHING_MOUNT_USE",
+                         issue_detail="CANNOT_CONVERT")
     return None
+
 
 def generate_issues(content: TextIO, issue_regexprs: Dict[str, IssueInfo],
                     issue_source: IssueSource,
@@ -173,11 +178,11 @@ def generate_issues(content: TextIO, issue_regexprs: Dict[str, IssueInfo],
             regex_res = re.search(r, line)
             if regex_res is not None:
                 issue = Issue(line_number=int(idx) + 1, matched_regex=r,
-                            matched_value=regex_res.group(0),
-                            matched_line=line.strip(),
-                            issue_source=issue_source,
-                            issue_type=info.issue_type,
-                            issue_detail=info.issue_detail)
+                              matched_value=regex_res.group(0),
+                              matched_line=line.strip(),
+                              issue_source=issue_source,
+                              issue_type=info.issue_type,
+                              issue_detail=info.issue_detail)
                 # if its a MOUNT_USE, try to see if its an exact match for a specific mount in ws
                 if issue.issue_type == "NON_MATCHING_MOUNT_USE":
                     exact_match = get_exact_match(idx, line, issue_source)
@@ -200,10 +205,10 @@ class CodeStrategy(ABC):
     def iter_issues(self) -> Iterator[Issue]:
         for issue_source, content_ in self.iter_content():
             try:
-                print(f"Scanning {issue_source.source_metadata.get('file_path')}")
+                log.info(f"Scanning {issue_source.source_metadata.get('relative_file_path')}")
                 yield from generate_issues(content_, issue_cfg, issue_source=issue_source, file_name=None)
             except (OSError, UnicodeDecodeError):
-                print(f"Unable to open file {issue_source.source_metadata.get('file_path')}; src: {str(issue_source)}")
+                log.error(f"Unable to open file {issue_source.source_metadata.get('relative_file_path')}; src: {str(issue_source)}")
                 pass
 
     def to_df(self) -> pd.DataFrame:
@@ -221,6 +226,7 @@ class LocalFSCodeStrategy(CodeStrategy):
 
     def iter_content(self):
         for code_dir in self.directories:
+            code_dir_with_suffix = str(code_dir).rstrip("/") + "/"
             for root, dirs, files in os.walk(str(code_dir)):
                 if '.git' in dirs:
                     dirs.remove('.git')
@@ -229,10 +235,11 @@ class LocalFSCodeStrategy(CodeStrategy):
                     try:
                         fp = Path(file_path).open("r", encoding="utf-8")
                         yield IssueSource(SourceType.FILE, source_metadata={
-                            "file_path": file_path
+                            "file_path": file_path,
+                            "relative_file_path": file_path.replace(code_dir_with_suffix, "")
                         }), fp
                     except (OSError, UnicodeDecodeError):
-                        print(f"Unable to open file {file_path}")
+                        log.error(f"Unable to open file {file_path}")
 
 
 class TestingCodeStrategyClusters(CodeStrategy):

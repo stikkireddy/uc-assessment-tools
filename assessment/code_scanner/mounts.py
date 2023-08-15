@@ -9,7 +9,7 @@ from typing import Optional, List, Iterator, Tuple
 
 import pandas as pd
 
-from assessment.code_scanner.utils import get_dbutils
+from assessment.code_scanner.utils import get_dbutils, log
 
 # TODO: remove this hard coded value
 temp_valid_prefix = "abfss"
@@ -88,6 +88,7 @@ def mounts_iter(valid_prefix: str) -> Iterator[Mount]:
             "DatabricksRoot", "DbfsReserved", "UnityCatalogVolumes", "databricks/mlflow-tracking",
             "databricks-datasets", "databricks/mlflow-registry", "databricks-results"
         ]:
+            log.info("Found mount with reserved source: %s", mnt.source)
             continue
         if mnt.source.startswith(valid_prefix):
             simple, maybe = variations(mnt.mountPoint)
@@ -95,6 +96,7 @@ def mounts_iter(valid_prefix: str) -> Iterator[Mount]:
                         is_mount_valid=True, simple=simple, maybe=maybe)
         else:
             cannot_convert_1, cannot_convert_2 = variations(mnt.mountPoint)
+            log.info("Found mount with invalid source: %s", mnt.source)
             yield Mount(target=mnt.source, raw_src=mnt.mountPoint,
                         is_mount_valid=False, cannot_convert=cannot_convert_2 + cannot_convert_1)
 
