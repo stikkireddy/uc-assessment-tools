@@ -50,6 +50,8 @@ def get_dbutils():
                     mountPoint=f"/mnt/fake_mnt_{i}") for i in range(150)]
         # blob not possible to migrate
     ]
+    dbutils.secrets._secrets = {m.mountPoint: m.source for m in dbutils.fs.fake_mounts
+                                if m.source.startswith("abfss://")}
     return dbutils
 
 
@@ -69,10 +71,19 @@ def in_dbx_notebook():
     return False
 
 
+class FakeSecrets:
+    def __int__(self):
+        self._secrets = {}
+
+    def get(self, key):
+        return self._secrets.get(key)
+
+
 class FakeDBUtils:
 
     def __init__(self):
         self.fs = FakeFS()
+        self.secrets = FakeSecrets()
 
 
 @dataclass
