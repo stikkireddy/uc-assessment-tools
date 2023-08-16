@@ -2,6 +2,7 @@ import io
 import os
 import tempfile
 import time
+import traceback
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -117,6 +118,7 @@ def RepoScanner():
                         _issues.append(iss)
                     set_issues(Issue.issues_to_df(_issues))
         except Exception as e:
+            log.error(traceback.format_exc())
             set_error(str(e))
         finally:
             set_loading(False)

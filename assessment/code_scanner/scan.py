@@ -31,6 +31,10 @@ class SourceType(enum.Enum):
 
 def enum_to_string_factory(data):
     def convert_value(obj):
+        # If a single field is too long, truncate it
+        if isinstance(obj, str):
+            if len(obj) > 10000:
+                return f"{obj[:10000]}..."
         if isinstance(obj, enum.Enum):
             return obj.value
         return obj
@@ -57,6 +61,7 @@ class Issue:
     @staticmethod
     def issues_to_df(issues: Union[Iterator['Issue'], List['Issue']]) -> pd.DataFrame:
         issues = [asdict(issue, dict_factory=enum_to_string_factory) for issue in issues]
+
         if len(issues) > 0:
             return pd.DataFrame(issues)
         return pd.DataFrame(columns=["issue_type", "issue_detail", "issue_source", "line_number", "matched_regex", ])
@@ -208,7 +213,8 @@ class CodeStrategy(ABC):
                 log.info(f"Scanning {issue_source.source_metadata.get('relative_file_path')}")
                 yield from generate_issues(content_, issue_cfg, issue_source=issue_source, file_name=None)
             except (OSError, UnicodeDecodeError):
-                log.error(f"Unable to open file {issue_source.source_metadata.get('relative_file_path')}; src: {str(issue_source)}")
+                log.error(
+                    f"Unable to open file {issue_source.source_metadata.get('relative_file_path')}; src: {str(issue_source)}")
                 pass
 
     def to_df(self) -> pd.DataFrame:
@@ -227,26 +233,35 @@ class LocalFSCodeStrategy(CodeStrategy):
         self.set_max_prog = set_max_prog
         self.directories = directories
 
-
     @staticmethod
     def get_path(src: IssueSource) -> str:
         return src.source_metadata.get("file_path")
 
+    @staticmethod
+    def file_count(directories: List[Path]) -> int:
+        file_count = 0
+
+        for code_dir in directories:
+            for root, dirs, files in os.walk(str(code_dir)):
+                if '.git' in dirs:
+                    dirs.remove('.git')
+                file_count += len(files)
+        return file_count
+
     def iter_content(self):
-        max_prog = 0
+        self.set_max_prog(self.file_count(self.directories))
         curr_prog = 0
         for code_dir in self.directories:
             code_dir_with_suffix = str(code_dir).rstrip("/") + "/"
             for root, dirs, files in os.walk(str(code_dir)):
-                if self.set_max_prog is not None:
-                    self.set_max_prog(max_prog + len(files))
-                    max_prog += len(files)
 
                 if '.git' in dirs:
                     dirs.remove('.git')
                 for file in files:
                     file_path = os.path.join(root, file)
                     try:
+                        if self.set_curr_file is not None:
+                            self.set_curr_file(file_path.replace(code_dir_with_suffix, ""))
                         fp = Path(file_path).open("r", encoding="utf-8")
                         yield IssueSource(SourceType.FILE, source_metadata={
                             "file_path": file_path,
@@ -258,13 +273,13 @@ class LocalFSCodeStrategy(CodeStrategy):
                         if self.set_curr_prog is not None:
                             curr_prog += 1
                             self.set_curr_prog(curr_prog)
-                        if self.set_curr_file is not None:
-                            self.set_curr_file(file_path.replace(code_dir_with_suffix, ""))
+
         # end
         if self.set_curr_file is not None:
             self.set_curr_file("")
             self.set_max_prog(0)
             self.set_curr_prog(0)
+
 
 class TestingCodeStrategyClusters(CodeStrategy):
 
