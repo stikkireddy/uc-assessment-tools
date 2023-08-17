@@ -1,7 +1,6 @@
 import io
 import os
 import tempfile
-import time
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -11,47 +10,13 @@ import pandas as pd
 import solara
 import solara.lab
 
-from assessment.code_scanner.mounts import mounts_pdf
 from assessment.code_scanner.repos import git_repo
 from assessment.code_scanner.scan import LocalFSCodeStrategy, Issue
-from assessment.code_scanner.utils import get_ws_client, get_ws_browser_hostname, change_log_filename, log, LOGS_FOLDER
-
-workspace_url = get_ws_browser_hostname() or get_ws_client(default_profile="uc-assessment-azure").config.host
-
-
-@solara.component
-def MountScanner():
-    mounts, set_mounts = solara.use_state(None)
-    loading, set_loading = solara.use_state(False)
-
-    mounts: pd.DataFrame
-    set_mounts: Callable[[pd.DataFrame], None]
-
-    def get_raw_data(csv=False):
-        df_copy = mounts.copy(deep=True)
-        df_copy['workspace_url'] = workspace_url
-        if csv is True:
-            return df_copy.to_csv(index=False)
-
-        return df_copy.to_parquet(index=False)
-
-    def get_mounts():
-        set_loading(True)
-        mounts_pd = mounts_pdf("abfss")
-        set_mounts(mounts_pd)
-        set_loading(False)
-
-    with solara.Card("Download Mounts Info"):
-        solara.Info("Note: This will ignore mounts: DatabricksRoot, DbfsReserved, UnityCatalogVolumes, "
-                    "databricks/mlflow-tracking, databricks-datasets, databricks/mlflow-registry, databricks-results.")
-        solara.Button("Load Mounts", on_click=get_mounts, style="margin-bottom: 25px")
-        if loading is True:
-            solara.Info(f"Loading...")
-            solara.ProgressLinear(True)
-        elif mounts is not None:
-            solara.FileDownload(label="Download Mounts Info", filename="mounts.csv",
-                                data=lambda: get_raw_data(csv=True))
-            solara.DataFrame(mounts)
+from assessment.code_scanner.utils import get_ws_client, change_log_filename, log, LOGS_FOLDER
+from assessment.ui.mounts.mount_scanner_v1 import MountScanner
+from assessment.ui.mounts.mount_scanner_v2 import MountScannerV2
+from assessment.ui.settings import Settings
+from assessment.ui.state import workspace_conf_ini, workspace_url
 
 
 @solara.component
@@ -134,7 +99,7 @@ def RepoScanner():
             solara.Info(f"Loading... Current File: {curr_file} "
                         f"Progress: {progress}/{max_progress} files scanned")
             if max_progress > 0 and progress > 0:
-                solara.ProgressLinear((progress/max_progress) * 100)
+                solara.ProgressLinear((progress / max_progress) * 100)
             else:
                 solara.ProgressLinear(True)
         elif issues is not None:
@@ -294,18 +259,40 @@ def FileBrowser(exec_base_path, exclude_prefixes: List[str] = None):
 
 
 @solara.component
-def Page():
-    # logging is done at hourly rollup
-    ts, _ = solara.use_state(datetime.utcnow().strftime("%Y-%m-%d-%H"))
-    log_file_name = make_logger_file_name(ts)
-    change_log_filename(log, log_file_name)
-    with solara.AppBar():
-        solara.AppBarTitle("Databricks Unity Catalog Utilities")
+def Home():
     with solara.Column():
         with solara.lab.Tabs():
             with solara.lab.Tab(label="Mount Info"):
-                MountScanner()
+                if workspace_conf_ini.value == "":
+                    MountScanner()
+                else:
+                    MountScannerV2()
             with solara.lab.Tab(label="Repo Scanner"):
                 RepoScanner()
             with solara.lab.Tab(label="Manage Logs"):
                 FileBrowser(LOGS_FOLDER)
+
+
+@solara.component
+def Page():
+    # logging is done at hourly rollup
+    ts, _ = solara.use_state(datetime.utcnow().strftime("%Y-%m-%d-%H"))
+    nav, set_nav = solara.use_state("home")
+    log_file_name = make_logger_file_name(ts)
+    change_log_filename(log, log_file_name)
+
+    with solara.AppBar():
+        solara.AppBarTitle("Databricks Unity Catalog Utilities")
+        solara.Button("Home",
+                      on_click=lambda: set_nav("home"),
+                      outlined=True,
+                      style="margin-right: 20px")
+        solara.Button("Settings",
+                      on_click=lambda: set_nav("settings"),
+                      outlined=True,
+                      style="margin-right: 20px")
+
+    if nav == "settings":
+        Settings()
+    elif nav == "home":
+        Home()

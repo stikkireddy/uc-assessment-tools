@@ -1,5 +1,12 @@
 # uc-assessment-tools
 
+## Development Instructions
+
+1. Make a local profile called:
+   1. dbx config profile: `uc-assessment-tools`
+2. run `pip install -e. `
+3. run `make local`
+
 ## Instructions
 
 ### Pre-Requisites
