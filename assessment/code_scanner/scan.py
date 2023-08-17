@@ -88,7 +88,7 @@ issue_cfg: Dict[str, IssueInfo] = {
     # /dbfs/mnt/ -- we dont know what the mount is
     r"""["']\/dbfs/""": IssueInfo("DBFS_USE", "NOT_POSSIBLE"),  # /dbfs/ -- we just know they use dbfs
     r"""udf\(""": IssueInfo("UDF_USE", "FOUND_UDF"),  # @udf(
-    r"""# MAGIC %scala""": IssueInfo("SCALA_USE", "FOUND_SCALA"),  # @udf(
+    r"""# MAGIC %scala""": IssueInfo("SCALA_USE", "FOUND_SCALA"),
     # check if its ufd( variables cannot have ( in them
     r"""spark.udf.register""": IssueInfo("UDF_USE", "FOUND_SQL_BASED_UDF"),  # @udf(
     # check for spark.udf.register
@@ -158,6 +158,20 @@ def get_exact_match(idx, line, issue_source: IssueSource) -> Optional[Issue]:
     return None
 
 
+def handle_magic(issue: Issue) -> Issue:
+    if issue.issue_type in ["MATCHING_MOUNT_USE", "NON_MATCHING_MOUNT_USE"]:
+        if issue.matched_line.startswith("# MAGIC"):
+            issue.issue_detail = "CANNOT_CONVERT_MAGIC_CMD"
+    return issue
+
+
+def handle_unsupported_file_types(issue: Issue):
+    if not issue.issue_source.source_metadata.get("file_path").endswith(".py"):
+        file_extension = Path(issue.issue_source.source_metadata.get("file_path")).suffix.upper().replace(".", "")
+        issue.issue_detail = "CANNOT_CONVERT_{}_FILE".format(file_extension)
+    return issue
+
+
 def generate_issues(content: TextIO, issue_regexprs: Dict[str, IssueInfo],
                     issue_source: IssueSource,
                     file_name: Optional[str] = None):
@@ -193,7 +207,10 @@ def generate_issues(content: TextIO, issue_regexprs: Dict[str, IssueInfo],
                     exact_match = get_exact_match(idx, line, issue_source)
                     if exact_match is not None:
                         issue = exact_match
-                yield issue
+
+                # TODO: We assume right now that all magic commands are SQL, but we could see instances of python or
+                #  scala magic commands that could be handled.
+                yield handle_unsupported_file_types(handle_magic(issue))
                 break
 
 

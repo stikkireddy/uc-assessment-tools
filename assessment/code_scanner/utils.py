@@ -71,12 +71,32 @@ def in_dbx_notebook():
     return False
 
 
+@dataclass
+class Scope:
+    name: str
+
+
+@dataclass
+class SecretMetadata:
+    key: str
+
+
 class FakeSecrets:
     def __int__(self):
         self._secrets = {}
+        self._scopes = []
 
-    def get(self, key):
-        return self._secrets.get(key)
+    def get(self, scope: str, key: str) -> Optional[str]:
+        if scope in [s.name for s in self.listScopes()]:
+            if self._secrets.get(scope) is not None:
+                return self._secrets[scope].get(key)
+        return None
+
+    def listScopes(self) -> List[Scope]:
+        return [Scope(name=scope) for scope in self._scopes]
+
+    def list(self, scope: str) -> List[SecretMetadata]:
+        return [SecretMetadata(key=key) for key in self._secrets.get(scope).keys()]
 
 
 class FakeDBUtils:
