@@ -1,4 +1,5 @@
 import functools
+
 try:
     import re2 as re
 except ImportError:
@@ -82,13 +83,23 @@ def get_mounts() -> List:
     return list(sorted(get_dbutils().fs.mounts(), key=custom_mount_sort))
 
 
+@functools.lru_cache
+def log_invalid_mounts(src):
+    log.info("Found mount with invalid source: %s", src)
+
+
+@functools.lru_cache
+def log_reserved_mounts(src):
+    log.info("Found mount with reserved source: %s", src)
+
+
 def mounts_iter(valid_prefix: str) -> Iterator[Mount]:
     for mnt in get_mounts():
         if mnt.source in [
             "DatabricksRoot", "DbfsReserved", "UnityCatalogVolumes", "databricks/mlflow-tracking",
             "databricks-datasets", "databricks/mlflow-registry", "databricks-results"
         ]:
-            log.info("Found mount with reserved source: %s", mnt.source)
+            log_reserved_mounts(mnt.source)
             continue
         if mnt.source.startswith(valid_prefix):
             simple, maybe = variations(mnt.mountPoint)
@@ -96,11 +107,10 @@ def mounts_iter(valid_prefix: str) -> Iterator[Mount]:
                         is_mount_valid=True, simple=simple, maybe=maybe)
         else:
             cannot_convert_1, cannot_convert_2 = variations(mnt.mountPoint)
-            log.info("Found mount with invalid source: %s", mnt.source)
+            log_invalid_mounts(mnt.source)
             yield Mount(target=mnt.source, raw_src=mnt.mountPoint,
                         is_mount_valid=False, cannot_convert=cannot_convert_2 + cannot_convert_1)
 
 
 def mounts_pdf(valid_prefix: str) -> pd.DataFrame:
     return pd.DataFrame(mounts_iter(valid_prefix))
-

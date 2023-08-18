@@ -3,7 +3,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from databricks.sdk import WorkspaceClient
 
@@ -26,16 +26,17 @@ def get_ws_client(default_profile="uc-assessment-azure"):
     return WorkspaceClient(profile=default_profile)
 
 
-def get_dbutils():
+
+def get_dbutils() -> Union["FakeDBUtils", "DBUtils"]:
     try:
         import IPython
         ip_shell = IPython.get_ipython()
         if ip_shell is None:
-            return False
+            raise ValueError("Not in IPython")
         _dbutils = ip_shell.ns_table["user_global"]["dbutils"]
         if _dbutils is not None:
             return _dbutils
-    except (ImportError, KeyError, AttributeError):
+    except (ImportError, KeyError, AttributeError, ValueError):
         pass
     # we are not in databricks and need testing
     dbutils = FakeDBUtils()
@@ -50,6 +51,8 @@ def get_dbutils():
                     mountPoint=f"/mnt/fake_mnt_{i}") for i in range(150)]
         # blob not possible to migrate
     ]
+    dbutils.secrets._secrets = {m.mountPoint: m.source for m in dbutils.fs.fake_mounts
+                                if m.source.startswith("abfss://")}
     return dbutils
 
 
@@ -69,10 +72,39 @@ def in_dbx_notebook():
     return False
 
 
+@dataclass
+class Scope:
+    name: str
+
+
+@dataclass
+class SecretMetadata:
+    key: str
+
+
+class FakeSecrets:
+    def __int__(self):
+        self._secrets = {}
+        self._scopes = []
+
+    def get(self, scope: str, key: str) -> Optional[str]:
+        if scope in [s.name for s in self.listScopes()]:
+            if self._secrets.get(scope) is not None:
+                return self._secrets[scope].get(key)
+        return None
+
+    def listScopes(self) -> List[Scope]:
+        return [Scope(name=scope) for scope in self._scopes]
+
+    def list(self, scope: str) -> List[SecretMetadata]:
+        return [SecretMetadata(key=key) for key in self._secrets.get(scope).keys()]
+
+
 class FakeDBUtils:
 
     def __init__(self):
         self.fs = FakeFS()
+        self.secrets = FakeSecrets()
 
 
 @dataclass
