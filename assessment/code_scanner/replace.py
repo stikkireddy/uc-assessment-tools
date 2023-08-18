@@ -86,39 +86,66 @@ class IssueResolverStrategy(ABC):
         pass
 
     @abstractmethod
-    def handle_issues(self, issues: List[Issue], issue_replace_mappings: List[IssueReplaceMapping]):
+    def handle_issues(self, issues: List[Issue]):
         pass
+
+
+def replace_string_with_custom_function(matched_string: str, line: str,
+                                        function_name: str = "get_uc_mount_target") -> str:
+    # we assume all lookups for the function call are normalized without trailing slash
+    # we also assume that mount lookups also do not start with dbfs: in the dictionaries
+    # the function needs to have the type hint: Callable[[str, bool], str]
+    # eg: def get_uc_mount_target(path: str, normalize: bool = True) -> str:
+    quote_types = ['f"', "f'", 'f"""', "f'''"] + ['"', "'", '"""', "'''"]
+    normalized_matched_string = matched_string.rstrip("/")
+    for quote_type in quote_types:
+        if normalized_matched_string.startswith(quote_type) or line.find(quote_type + normalized_matched_string) != -1:
+            # all lookups will be normalized and follow pattern /mnt/<mount_name>/*
+            normalized_lookup_string = matched_string.replace("dbfs:", "").rstrip("/")
+            function_call_string = f"{function_name}('{normalized_lookup_string}', normalize=True)"
+            replacement = function_call_string + " + " + quote_type
+            replaced_line = line.replace(quote_type + normalized_matched_string, replacement, 1)
+            return replaced_line
+    return line
 
 
 class FileIssueSimpleResolver(IssueResolverStrategy):
 
-    def __init__(self, input_reader: InputReader, output_writer: OutputWriter):
+    def __init__(self,
+                 input_reader: InputReader,
+                 output_writer: OutputWriter,
+                 support_maybes: bool = True):
         super().__init__(input_reader, output_writer)
+        self.support_maybes = support_maybes
         self.file_issue_mapping = defaultdict(list)
 
     def filter_issues(self, issues: List[Issue]):
         # we can only handle file issues which are simple find and replace
-        return [issue for issue in issues if issue.issue_source.source_type == SourceType.FILE and
-                issue.issue_detail == "SIMPLE"]
+        valid_issues = []
+        for issue in issues:
+            # only replace content if its a file, it is a matching mount use and it is a simple issue or maybe
+            # flag is turned on
+            if issue.issue_source.source_type == SourceType.FILE and issue.issue_type == "MATCHING_MOUNT_USE":
+                if self.support_maybes is True and issue.issue_detail == "MAYBE":
+                    valid_issues.append(issue)
+                if issue.issue_detail == "SIMPLE":
+                    valid_issues.append(issue)
+        return valid_issues
 
-    def _replace_content(self, file_path: str, issue_replace_mappings: List[IssueReplaceMapping]) -> io.StringIO:
+    def _replace_content(self, file_path: str) -> io.StringIO:
         src = IssueSource(SourceType.FILE, source_metadata={"file_path": file_path})
         lines = self.input_reader.open(src).readlines()
         issues = self.file_issue_mapping[file_path]
         for issue in issues:
-            issue_replace_mapping = self.search_issue_replace_mapping(issue, issue_replace_mappings)
-            if issue_replace_mapping is not None:
-                target_replacement = issue_replace_mapping.match_mapping[issue.matched_value]
-                lines[issue.line_number - 1] = lines[issue.line_number - 1].replace(issue.matched_value,
-                                                                                    target_replacement)
-
+            lines[issue.line_number - 1] = replace_string_with_custom_function(issue.matched_value,
+                                                                               lines[issue.line_number - 1])
         return io.StringIO("".join(lines))
 
-    def handle_issues(self, issues: List[Issue], issue_replace_mappings: List[IssueReplaceMapping]):
+    def handle_issues(self, issues: List[Issue]):
         # TODO: need to fix this
         for issue in self.filter_issues(issues):
             self.file_issue_mapping[LocalFSCodeStrategy.get_path(issue.issue_source)].append(issue)
         for file_path, issues in self.file_issue_mapping.items():
-            new_content = self._replace_content(file_path, issue_replace_mappings).getvalue()
+            new_content = self._replace_content(file_path).getvalue()
             self.output_writer.write(IssueSource(SourceType.FILE, source_metadata={"file_path": file_path}),
                                      io.StringIO(new_content))

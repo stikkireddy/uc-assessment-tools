@@ -266,7 +266,8 @@ class LocalFSCodeStrategy(CodeStrategy):
         return file_count
 
     def iter_content(self):
-        self.set_max_prog(self.file_count(self.directories))
+        if self.set_max_prog is not None:
+            self.set_max_prog(self.file_count(self.directories))
         curr_prog = 0
         for code_dir in self.directories:
             code_dir_with_suffix = str(code_dir).rstrip("/") + "/"
@@ -294,7 +295,9 @@ class LocalFSCodeStrategy(CodeStrategy):
         # end
         if self.set_curr_file is not None:
             self.set_curr_file("")
+        if self.set_max_prog is not None:
             self.set_max_prog(0)
+        if self.set_curr_prog is not None:
             self.set_curr_prog(0)
 
 

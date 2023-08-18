@@ -3,7 +3,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from databricks.sdk import WorkspaceClient
 
@@ -26,16 +26,17 @@ def get_ws_client(default_profile="uc-assessment-azure"):
     return WorkspaceClient(profile=default_profile)
 
 
-def get_dbutils():
+
+def get_dbutils() -> Union["FakeDBUtils", "DBUtils"]:
     try:
         import IPython
         ip_shell = IPython.get_ipython()
         if ip_shell is None:
-            return False
+            raise ValueError("Not in IPython")
         _dbutils = ip_shell.ns_table["user_global"]["dbutils"]
         if _dbutils is not None:
             return _dbutils
-    except (ImportError, KeyError, AttributeError):
+    except (ImportError, KeyError, AttributeError, ValueError):
         pass
     # we are not in databricks and need testing
     dbutils = FakeDBUtils()
