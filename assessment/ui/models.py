@@ -5,6 +5,7 @@ from databricks.sdk import WorkspaceClient
 from pydantic import BaseModel
 
 from assessment.code_scanner.multi_ws import WorkspaceContextManager
+from assessment.code_scanner.utils import log
 
 
 class DatabricksConfig(BaseModel):
@@ -77,6 +78,7 @@ class WorkspaceConf(BaseModel):
             # Skip default section if it is empty
             if section_name == "DEFAULT" and len(dict(config_data).keys()) == 0:
                 continue
+            log.info("Loading config for section: %s", section_name)
             databricks_configs[section_name] = DatabricksConfig(**dict(config_data))
         return cls(configs=databricks_configs)
 
@@ -101,11 +103,13 @@ class WorkspaceConf(BaseModel):
             cluster_error = None
             try:
                 config_data.check_access()
+                log.info("Access to %s is valid", section_name)
             except Exception as e:
                 valid = False
                 auth_error = str(e)
             try:
                 config_data.check_cluster()
+                log.info("Cluster for alias %s is valid", section_name)
             except Exception as e:
                 valid = False
                 cluster_error = str(e)

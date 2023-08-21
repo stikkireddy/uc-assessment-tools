@@ -5,6 +5,8 @@ import solara
 import solara.lab
 from reacton import ipyvuetify as v
 
+from assessment.code_scanner.utils import LOGS_FOLDER
+from assessment.ui.components.log_browser import LogBrowser
 from assessment.ui.models import WorkspaceConf
 from assessment.ui.state import workspace_conf_ini, repo_conf_toml
 
@@ -37,6 +39,7 @@ def ValidateWSConfigs():
 
     with solara.Column():
         solara.Button("Validate Configs", color="primary", outlined=True, on_click=on_click)
+        solara.Info(f"Validating Workspace Configs... Refreshed {increment} times...")
         if result.state == solara.ResultState.FINISHED:
             if workspace_conf_df is not None:
                 solara.DataFrame(df=workspace_conf_df)
@@ -64,3 +67,5 @@ def Settings():
                     v_model=repo_conf_toml.value,
                     on_v_model=repo_conf_toml.set, solo=True, hide_details=True, outlined=True, rows=1,
                     auto_grow=True)
+        with solara.lab.Tab("Manage Logs"):
+            LogBrowser(LOGS_FOLDER)
