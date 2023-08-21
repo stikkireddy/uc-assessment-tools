@@ -12,14 +12,34 @@ from assessment.ui.state import workspace_conf_ini, repo_conf_toml
 
 
 @solara.component
-def ValidateWSConfigs():
+def WorkspaceConfig():
     workspace_conf, set_workspace_conf = solara.use_state(cast(Optional[WorkspaceConf], None))
     workspace_conf_df, set_workspace_conf_df = solara.use_state(cast(Optional[pd.DataFrame], None))
-    increment, set_increment = solara.use_state(0)
     error, set_error = solara.use_state("")
 
+    def redact_content(content: str) -> str:
+        lines = content.split("\n")
+        new_lines = []
+        for line in lines:
+            if line.strip().startswith("token"):
+                new_lines.append("token = dapi**********")
+            else:
+                new_lines.append(line)
+        return "\n".join(new_lines)
+
+    solara.FileDrop(
+        label="Upload Workspace Config",
+        on_file=lambda file: workspace_conf_ini.set(file.get("data").decode("utf-8")),
+        lazy=False
+    )
+    v.Textarea(
+        v_model=redact_content(workspace_conf_ini.value),
+        solo=True, hide_details=True, outlined=True, rows=1,
+        disabled=True,
+        auto_grow=True)
+
     def validate_ws():
-        if increment == 0:
+        if workspace_conf_ini is None or workspace_conf_ini.value is None or workspace_conf_ini.value.strip() == "":
             return
         try:
             wc = WorkspaceConf.from_ini(workspace_conf_ini.value)
@@ -29,38 +49,25 @@ def ValidateWSConfigs():
             set_error(str(e))
             return
 
-    # result = None
-    # if increment > 0:
-    result = solara.use_thread(validate_ws, [increment])
+    result = solara.use_thread(validate_ws, [workspace_conf_ini.value])
 
-    def on_click():
-        set_workspace_conf(None)
-        set_increment(increment + 1)
+    if result.state == solara.ResultState.FINISHED:
+        if workspace_conf_df is not None:
+            solara.Info(f"Validated Results...")
+            solara.DataFrame(df=workspace_conf_df)
+    elif result.state == solara.ResultState.ERROR:
+        solara.Error(f"Error occurred: {result.error}")
+    else:
+        solara.Info(f"Validating Workspace Configs...")
+        solara.ProgressLinear(value=True)
 
-    with solara.Column():
-        solara.Button("Validate Configs", color="primary", outlined=True, on_click=on_click)
-        solara.Info(f"Validating Workspace Configs... Refreshed {increment} times...")
-        if result.state == solara.ResultState.FINISHED:
-            if workspace_conf_df is not None:
-                solara.DataFrame(df=workspace_conf_df)
-        elif result.state == solara.ResultState.ERROR:
-            solara.Error(f"Error occurred: {result.error}")
-        else:
-            solara.Info(f"Running... (status = {result.state})")
-            solara.ProgressLinear(value=True)
 
 @solara.component
 def Settings():
     with solara.lab.Tabs():
-        with solara.lab.Tab("Validate"):
-            with solara.Card("Validate Configs"):
-                ValidateWSConfigs()
         with solara.lab.Tab("Workspace Config"):
             with solara.Card("Configure Workspace Settings"):
-                v.Textarea(
-                    v_model=workspace_conf_ini.value,
-                    on_v_model=workspace_conf_ini.set, solo=True, hide_details=True, outlined=True, rows=1,
-                    auto_grow=True)
+                WorkspaceConfig()
         with solara.lab.Tab("Repos Config"):
             with solara.Card("Configure Repos Settings"):
                 v.Textarea(
