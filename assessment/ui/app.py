@@ -287,8 +287,8 @@ def Home():
                     MountScannerV2(mounts, set_mounts)
             with solara.lab.Tab(label="Repo Scanner"):
                 RepoScanner(mounts, set_mounts, issues, set_issues)
-            with solara.lab.Tab(label="Repo Find and Replace"):
-                CodeFindAndReplace(issues, set_issues)
+            # with solara.lab.Tab(label="Repo Find and Replace"):
+            #     CodeFindAndReplace(issues, set_issues)
             with solara.lab.Tab(label="Manage Logs"):
                 FileBrowser(LOGS_FOLDER)
 
