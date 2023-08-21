@@ -1,4 +1,5 @@
 # DESIGNED FOR MULTIPLE WORKSPACES
+import base64
 import json
 from collections import defaultdict
 from typing import List, cast, Optional, Callable
@@ -33,6 +34,32 @@ def get_uc_mount_target(mnt_path: str, normalize: bool = True) -> str:
     mnt_target = mnt_target.rstrip("/")
   return mnt_target
 """
+
+@solara.component
+def CopyClipboardButton(content):
+    content_b64 = base64.b64encode(content.encode("utf-8")).decode("utf-8")
+    solara.HTML(tag="script", unsafe_innerHTML="""
+        console.log("mounted clipboard button");
+        var copyButtons = document.querySelectorAll(".copyToClipboardButton");
+
+        copyButtons.forEach(function(button) {
+            button.addEventListener("click", function() {
+""" + f"""
+                var textToCopy = atob("{content_b64}");
+""" + """
+                navigator.clipboard.writeText(textToCopy)
+                    .then(function() {
+                        console.log("Copied content to clipboard ...");
+                    })
+                    .catch(function(error) {
+                        console.error("Failed to copy: ", error);
+                    });
+            });
+        });
+            """
+                )
+    solara.Button("Copy To Clipboard", classes=["copyToClipboardButton"],
+                  style="margin-bottom: 10px; margin-top: 10px;")
 
 
 @solara.component
@@ -111,4 +138,5 @@ def MountScannerV2(mounts: pd.DataFrame, set_mounts: Callable[[pd.DataFrame], No
                 with solara.lab.Tab("Raw Data..."):
                     solara.DataFrame(mounts)
                 with solara.lab.Tab("Shared Notebook Snippet"):
-                    solara.Markdown(f"```{process_mounts(mounts)}```")
+                    CopyClipboardButton(process_mounts(mounts))
+                    solara.Markdown(f"```python{process_mounts(mounts)}```")
