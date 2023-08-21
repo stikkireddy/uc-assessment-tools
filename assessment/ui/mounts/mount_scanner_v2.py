@@ -35,6 +35,7 @@ def get_uc_mount_target(mnt_path: str, normalize: bool = True) -> str:
   return mnt_target
 """
 
+
 @solara.component
 def CopyClipboardButton(content):
     content_b64 = base64.b64encode(content.encode("utf-8")).decode("utf-8")
@@ -97,7 +98,6 @@ def MountScannerV2(mounts: pd.DataFrame, set_mounts: Callable[[pd.DataFrame], No
                 uc_mount_mapping[org_id][mnt_path] = mnt_target
         return get_raw_code(org_host_mapping, uc_mount_mapping)
 
-
     def get_mounts():
         set_loading(True)
         set_error("")
@@ -113,7 +113,7 @@ def MountScannerV2(mounts: pd.DataFrame, set_mounts: Callable[[pd.DataFrame], No
                 mounts_pd['workspace_url'] = workspace_url
                 pdfs.append(mounts_pd)
             except Exception as e:
-                set_error(error + f"\nWorkspace: {alias} " +str(e))
+                set_error(error + f"\nWorkspace: {alias} " + str(e))
                 return
         set_mounts(pd.concat(pdfs, ignore_index=True))
         set_loading(False)
