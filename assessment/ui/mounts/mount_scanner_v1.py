@@ -4,24 +4,26 @@ import pandas as pd
 import solara
 
 from assessment.code_scanner.mounts import mounts_pdf
+from assessment.code_scanner.utils import zip_bytes
 from assessment.ui.state import workspace_url
 
 # DESIGNED FOR SINGLE WORKSPACE
 @solara.component
-def MountScanner():
-    mounts, set_mounts = solara.use_state(None)
+def MountScanner(mounts: pd.DataFrame, set_mounts: Callable[[pd.DataFrame], None]):
     loading, set_loading = solara.use_state(False)
 
-    mounts: pd.DataFrame
-    set_mounts: Callable[[pd.DataFrame], None]
-
-    def get_raw_data(csv=False):
+    def get_raw_data(csv=False, zip_file=True, file_name="mounts.zip"):
         df_copy = mounts.copy(deep=True)
         df_copy['workspace_url'] = workspace_url
         if csv is True:
-            return df_copy.to_csv(index=False)
+            data = df_copy.to_csv(index=False)
+        else:
+            data = df_copy.to_parquet(index=False)
 
-        return df_copy.to_parquet(index=False)
+        if zip_file is True:
+            return zip_bytes(data, file_name)
+
+        return data
 
     def get_mounts():
         set_loading(True)
@@ -37,6 +39,6 @@ def MountScanner():
             solara.Info(f"Loading...")
             solara.ProgressLinear(True)
         elif mounts is not None:
-            solara.FileDownload(label="Download Mounts Info", filename="mounts.csv",
-                                data=lambda: get_raw_data(csv=True))
+            solara.FileDownload(label="Download Mounts Info", filename="mounts.zip",
+                                data=lambda: get_raw_data(csv=True, file_name="mounts.csv"))
             solara.DataFrame(mounts)

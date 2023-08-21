@@ -17,7 +17,7 @@ from typing import Iterator, TextIO, List, Dict, Optional, Tuple, Union, Callabl
 import pandas as pd
 from databricks.sdk import WorkspaceClient
 
-from assessment.code_scanner.mounts import mounts_iter, temp_valid_prefix
+from assessment.code_scanner.mounts import mounts_iter, temp_valid_prefix, Mount
 
 
 class SourceType(enum.Enum):
@@ -123,8 +123,10 @@ def is_this_a_fuse_mount(match_value: str, line: str) -> bool:
     return False
 
 
-def get_exact_match(idx, line, issue_source: IssueSource) -> Optional[Issue]:
-    for mnt in mounts_iter(temp_valid_prefix):
+def get_exact_match(idx, line,
+                    issue_source: IssueSource,
+                    discovered_mounts: Optional[List[Mount]] = None) -> Optional[Issue]:
+    for mnt in discovered_mounts or mounts_iter(temp_valid_prefix):
         r, simple_match = mnt.find_simple_match(line)
         if simple_match is not None:
             if is_this_a_fuse_mount(simple_match, line):
@@ -174,6 +176,7 @@ def handle_unsupported_file_types(issue: Issue):
 
 def generate_issues(content: TextIO, issue_regexprs: Dict[str, IssueInfo],
                     issue_source: IssueSource,
+                    discovered_mounts: Optional[List[Mount]] = None,
                     file_name: Optional[str] = None):
     # handle scala file issue
     # handle udf import issue or scala udf import issue
@@ -204,7 +207,7 @@ def generate_issues(content: TextIO, issue_regexprs: Dict[str, IssueInfo],
                               issue_detail=info.issue_detail)
                 # if its a MOUNT_USE, try to see if its an exact match for a specific mount in ws
                 if issue.issue_type == "NON_MATCHING_MOUNT_USE":
-                    exact_match = get_exact_match(idx, line, issue_source)
+                    exact_match = get_exact_match(idx, line, issue_source, discovered_mounts)
                     if exact_match is not None:
                         issue = exact_match
 
@@ -219,6 +222,8 @@ class CodeStrategy(ABC):
     # we will have different implementations for dbfs, adls, git repositories, s3, etc
     # implement download_code_directories if you are downloading files from somewhere to local file system
     # implement download_content_items if you are downloading files from api into memory
+    def __init__(self, discovered_mounts: Optional[List[Mount]] = None):
+        self._discovered_mounts = discovered_mounts
 
     @abstractmethod
     def iter_content(self) -> Iterator[Tuple[IssueSource, TextIO]]:
@@ -228,10 +233,12 @@ class CodeStrategy(ABC):
         for issue_source, content_ in self.iter_content():
             try:
                 log.info(f"Scanning {issue_source.source_metadata.get('relative_file_path')}")
-                yield from generate_issues(content_, issue_cfg, issue_source=issue_source, file_name=None)
+                yield from generate_issues(content_, issue_cfg, issue_source=issue_source, file_name=None,
+                                           discovered_mounts=self._discovered_mounts)
             except (OSError, UnicodeDecodeError):
                 log.error(
-                    f"Unable to open file {issue_source.source_metadata.get('relative_file_path')}; src: {str(issue_source)}")
+                    f"Unable to open file {issue_source.source_metadata.get('relative_file_path')}; "
+                    f"src: {str(issue_source)}")
                 pass
 
     def to_df(self) -> pd.DataFrame:
@@ -243,8 +250,9 @@ class LocalFSCodeStrategy(CodeStrategy):
     def __init__(self, directories: List[Path],
                  set_max_prog: Callable[[int], None] = None,
                  set_curr_prog: Callable[[int], None] = None,
-                 set_curr_file: Callable[[str], None] = None
-                 ):
+                 set_curr_file: Callable[[str], None] = None,
+                 discovered_mounts: Optional[List[Mount]] = None):
+        super().__init__(discovered_mounts=discovered_mounts)
         self.set_curr_file = set_curr_file
         self.set_curr_prog = set_curr_prog
         self.set_max_prog = set_max_prog
@@ -304,6 +312,7 @@ class LocalFSCodeStrategy(CodeStrategy):
 class TestingCodeStrategyClusters(CodeStrategy):
 
     def __init__(self, api_client: WorkspaceClient):
+        super().__init__()
         self.api_client = api_client
 
     def iter_content(self):

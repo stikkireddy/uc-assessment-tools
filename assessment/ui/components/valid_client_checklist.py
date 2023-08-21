@@ -34,17 +34,9 @@ def ValidClientCheckList(selected_ws: solara.Reactive[List[str]], clusters: bool
         if aliases is not None:
             solara.Info(f"Selected workspaces: {str(selected_ws.value)}")
             with solara.Column():
-                for alias in aliases:
-                    def modify_list_with_bool(bool_value, name=alias[0]):
-                        if bool_value is True:
-                            if name not in selected_ws.value:
-                                selected_ws.value = selected_ws.value + [name]
-                        else:
-                            if name in selected_ws.value:
-                                selected_ws.value = [name for name in selected_ws.value if name != name]
+                choices: List[str] = [alias[0] for alias in aliases]
+                solara.SelectMultiple(label="Workspaces", values=selected_ws, all_values=choices, dense=True)
 
-                    solara.Checkbox(label=f"{alias[0]}: {alias[1]}", value=False,
-                                    on_value=modify_list_with_bool)
     elif result.state == solara.ResultState.ERROR:
         solara.Error(f"Error occurred: {result.error}")
     else:

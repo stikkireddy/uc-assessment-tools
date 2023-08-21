@@ -3,7 +3,7 @@ from typing import Optional, Union, Callable
 
 import pandas as pd
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.compute import Language, ResultType, Results
+from databricks.sdk.service.compute import Language, ResultType, Results, CommandStatusResponse
 
 
 def create_dataframe(results: Results) -> Optional[pd.DataFrame]:
@@ -50,7 +50,7 @@ class WorkspaceContextManager:
             self.set_state(state)
 
     def _create_context(self, lang: Language) -> None:
-        self._set_state(f"Creating cluster {self.cluster_id} context for {str(lang)}!")
+        self._set_state(f"Creating execution context for cluster {self.cluster_id} for {str(lang)}!")
         context_resp = self.client.command_execution.create_and_wait(
             cluster_id=self.cluster_id, language=lang, timeout=timedelta(minutes=20))
         self.contexts[lang] = context_resp.id
@@ -59,21 +59,27 @@ class WorkspaceContextManager:
 
         self._set_state(f"Ensuring cluster {self.cluster_id} is running!")
         self.client.clusters.ensure_cluster_is_running(cluster_id=self.cluster_id)
-        for lang in [Language.PYTHON, Language.SCALA]:
-            self._create_context(lang)
+        # for lang in [Language.PYTHON, Language.SCALA]:
+        #     self._create_context(lang)
 
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         for lang, context_id in self.contexts.items():
             self.client.command_execution.destroy(cluster_id=self.cluster_id, context_id=context_id)
-            self._set_state(f"Destroying cluster {self.cluster_id} context for {str(lang)}!")
+            self._set_state(f"Destroying execution context for cluster {self.cluster_id} for {str(lang)}!")
 
     def execute_python(self, command, as_pdf: bool = True) -> Union[Results, Optional[pd.DataFrame]]:
         return self._execute(Language.PYTHON, command, as_pdf)
 
     def execute_scala(self, command, as_pdf: bool = True) -> Union[Results, Optional[pd.DataFrame]]:
         return self._execute(Language.SCALA, command, as_pdf)
+
+    def get_spark_config(self, key: str) -> Optional[str]:
+        val = self._execute(Language.PYTHON, f"print(spark.conf.get('{key}', 'unknown'))", as_pdf=False).data
+        if val == "unknown":
+            return None
+        return val
 
     def _execute(self, lang, command, as_pdf: bool = True) -> Union[Results, Optional[pd.DataFrame]]:
         context_id = self.contexts.get(lang)
@@ -82,7 +88,7 @@ class WorkspaceContextManager:
             context_id = self.contexts[lang]
 
         self._set_state(f"Running command {str(command[:10])}...")
-        resp = self.client.command_execution.execute_and_wait(
+        resp: CommandStatusResponse = self.client.command_execution.execute_and_wait(
             cluster_id=self.cluster_id,
             context_id=context_id,
             command=command,
@@ -90,7 +96,7 @@ class WorkspaceContextManager:
             timeout=timedelta(minutes=20),
         )
 
-        if as_pdf is True and resp.result_type is ResultType.TABLE:
-            return create_dataframe(resp)
+        if as_pdf is True and resp.results.result_type is ResultType.TABLE:
+            return create_dataframe(resp.results)
 
         return resp.results
