@@ -57,6 +57,7 @@ class Issue:
     matched_regex: Optional[str] = None
     matched_line: Optional[str] = None
     matched_value: Optional[str] = None
+    workspace_url: Optional[str] = None
 
     @staticmethod
     def issues_to_df(issues: Union[Iterator['Issue'], List['Issue']]) -> pd.DataFrame:
@@ -66,6 +67,15 @@ class Issue:
             return pd.DataFrame(issues)
         return pd.DataFrame(columns=["issue_type", "issue_detail", "issue_source", "line_number", "matched_regex", ])
 
+    @staticmethod
+    def from_csv_bytes(csv_bytes: bytes) -> Iterator['Issue']:
+        issues = []
+        try:
+            for row in pd.read_csv(io.BytesIO(csv_bytes)).to_dict(orient="records"):
+                issues.append(Issue(**row))
+        except Exception as e:
+            log.error("Error parsing issues csv: %s", e)
+        return issues
 
 @dataclass
 class IssueInfo:
