@@ -195,6 +195,13 @@ def get_exact_match(idx, line,
                                              issue_source=issue_source,
                                              issue_type="MATCHING_MOUNT_USE",
                                              issue_detail="ALREADY_CONVERTED"))
+            else:
+                multiple_issues.append(Issue(line_number=int(idx) + 1, matched_regex=r,
+                                             matched_value=maybe_match,
+                                             matched_line=line.strip(),
+                                             issue_source=issue_source,
+                                             issue_type="MATCHING_MOUNT_USE",
+                                             issue_detail="MAYBE"))
             if has_mult_occurs is False:
                 return multiple_issues
             continue
