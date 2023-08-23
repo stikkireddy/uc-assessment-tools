@@ -136,7 +136,7 @@ class FileIssueSimpleResolver(IssueResolverStrategy):
     def __init__(self,
                  input_reader: InputReader,
                  output_writer: OutputWriter,
-                 support_maybes: bool = True):
+                 support_maybes: bool = False):
         super().__init__(input_reader, output_writer)
         self.support_maybes = support_maybes
         self.file_issue_mapping = defaultdict(list)
