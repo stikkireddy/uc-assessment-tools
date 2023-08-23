@@ -1,3 +1,4 @@
+import ast
 import enum
 import io
 import json
@@ -68,14 +69,31 @@ class Issue:
         return pd.DataFrame(columns=["issue_type", "issue_detail", "issue_source", "line_number", "matched_regex", ])
 
     @staticmethod
-    def from_csv_bytes(csv_bytes: bytes) -> Iterator['Issue']:
+    def from_df(pdf: pd.DataFrame) -> List["Issue"]:
         issues = []
         try:
-            for row in pd.read_csv(io.BytesIO(csv_bytes)).to_dict(orient="records"):
-                issues.append(Issue(**row))
+            for row in pdf.to_dict(orient="records"):
+                iss = Issue(**row)
+                # Csv will have it as a python string
+                issue_source_raw = row.get("issue_source", "{}")
+                if isinstance(issue_source_raw, str):
+                    issue_src = ast.literal_eval(issue_source_raw)
+                    src_type = SourceType[issue_src.get("source_type")]
+                    issue_src = IssueSource(**issue_src)
+                    issue_src.source_type = src_type
+                else:
+                    issue_src = IssueSource(**issue_source_raw)
+                iss.issue_source = issue_src
+                issues.append(iss)
         except Exception as e:
             log.error("Error parsing issues csv: %s", e)
-        return issues
+        finally:
+            return issues
+
+    @staticmethod
+    def from_csv_bytes(csv_bytes: bytes) -> Iterator['Issue']:
+        pdf = pd.read_csv(io.BytesIO(csv_bytes))
+        return Issue.from_df(pdf)
 
 @dataclass
 class IssueInfo:
@@ -133,9 +151,23 @@ def is_this_a_fuse_mount(match_value: str, line: str) -> bool:
     return False
 
 
+def has_multiple_occurrences(string, inputs: List[str]) -> bool:
+    occurrence_count = {}
+
+    for input_str in inputs:
+        count = string.count(input_str)
+        occurrence_count[input_str] = count
+
+        if count > 1:
+            return True
+
+    return False
+
 def get_exact_match(idx, line,
                     issue_source: IssueSource,
-                    discovered_mounts: Optional[List[Mount]] = None) -> Optional[Issue]:
+                    discovered_mounts: Optional[List[Mount]] = None) -> Optional[List[Issue]]:
+    multiple_issues = []
+    has_mult_occurs = has_multiple_occurrences(line, ["/mnt"])
     for mnt in discovered_mounts or mounts_iter(temp_valid_prefix):
         r, simple_match = mnt.find_simple_match(line)
         if simple_match is not None:
@@ -145,29 +177,39 @@ def get_exact_match(idx, line,
                 issue_detail = "MAYBE_FOUND_OTHER_CLOUD_PROTOCOLS"
             else:
                 issue_detail = "SIMPLE"
-            return Issue(line_number=int(idx) + 1, matched_regex=r,
-                         matched_value=simple_match,
-                         matched_line=line.strip(),
-                         issue_source=issue_source,
-                         issue_type="MATCHING_MOUNT_USE",
-                         issue_detail=issue_detail)
+            multiple_issues.append(Issue(line_number=int(idx) + 1, matched_regex=r,
+                                         matched_value=simple_match,
+                                         matched_line=line.strip(),
+                                         issue_source=issue_source,
+                                         issue_type="MATCHING_MOUNT_USE",
+                                         issue_detail=issue_detail))
+            if has_mult_occurs is False:
+                return multiple_issues
+            continue
         r, maybe_match = mnt.find_maybe_match(line)
         if maybe_match is not None:
-            return Issue(line_number=int(idx) + 1, matched_regex=r,
-                         matched_value=maybe_match,
-                         matched_line=line.strip(),
-                         issue_source=issue_source,
-                         issue_type="MATCHING_MOUNT_USE",
-                         issue_detail="MAYBE")
+            if f"get_uc_mount_target('{maybe_match}'," in line:
+                multiple_issues.append(Issue(line_number=int(idx) + 1, matched_regex=r,
+                                             matched_value=maybe_match,
+                                             matched_line=line.strip(),
+                                             issue_source=issue_source,
+                                             issue_type="MATCHING_MOUNT_USE",
+                                             issue_detail="ALREADY_CONVERTED"))
+            if has_mult_occurs is False:
+                return multiple_issues
+            continue
         r, cannot_convert_match = mnt.find_cannot_convert_match(line)
         if cannot_convert_match is not None:
-            return Issue(line_number=int(idx) + 1, matched_regex=r,
-                         matched_value=cannot_convert_match,
-                         matched_line=line.strip(),
-                         issue_source=issue_source,
-                         issue_type="MATCHING_MOUNT_USE",
-                         issue_detail="CANNOT_CONVERT")
-    return None
+            multiple_issues.append(Issue(line_number=int(idx) + 1, matched_regex=r,
+                                         matched_value=cannot_convert_match,
+                                         matched_line=line.strip(),
+                                         issue_source=issue_source,
+                                         issue_type="MATCHING_MOUNT_USE",
+                                         issue_detail="CANNOT_CONVERT"))
+            if has_mult_occurs is False:
+                return multiple_issues
+            continue
+    return multiple_issues
 
 
 def handle_magic(issue: Issue) -> Issue:
@@ -218,12 +260,16 @@ def generate_issues(content: TextIO, issue_regexprs: Dict[str, IssueInfo],
                 # if its a MOUNT_USE, try to see if its an exact match for a specific mount in ws
                 if issue.issue_type == "NON_MATCHING_MOUNT_USE":
                     exact_match = get_exact_match(idx, line, issue_source, discovered_mounts)
-                    if exact_match is not None:
-                        issue = exact_match
-
-                # TODO: We assume right now that all magic commands are SQL, but we could see instances of python or
-                #  scala magic commands that could be handled.
-                yield handle_unsupported_file_types(handle_magic(issue))
+                    if exact_match is not None and exact_match != []:
+                        for iss in exact_match:
+                            yield handle_unsupported_file_types(handle_magic(iss))
+                    else:
+                        # TODO: We may not have any exact matches so just yield the generic capture of /mnt or /dbfs
+                        yield handle_unsupported_file_types(handle_magic(issue))
+                else:
+                    # TODO: We assume right now that all magic commands are SQL, but we could see instances of python or
+                    #  scala magic commands that could be handled.
+                    yield handle_unsupported_file_types(handle_magic(issue))
                 break
 
 
@@ -271,6 +317,10 @@ class LocalFSCodeStrategy(CodeStrategy):
     @staticmethod
     def get_path(src: IssueSource) -> str:
         return src.source_metadata.get("file_path")
+
+    @staticmethod
+    def get_relative_path(src: IssueSource) -> str:
+        return src.source_metadata.get("relative_file_path")
 
     @staticmethod
     def file_count(directories: List[Path]) -> int:

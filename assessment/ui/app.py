@@ -1,3 +1,4 @@
+import os
 import tempfile
 import traceback
 from datetime import datetime
@@ -14,6 +15,7 @@ from assessment.code_scanner.repos import git_repo
 from assessment.code_scanner.scan import LocalFSCodeStrategy, Issue
 from assessment.code_scanner.utils import get_ws_client, change_log_filename, log, LOGS_FOLDER
 from assessment.ui.components.log_browser import LogBrowser
+from assessment.ui.mounts.code_replace import CodeFindAndReplace
 from assessment.ui.mounts.mount_scanner_v1 import MountScanner
 from assessment.ui.mounts.mount_scanner_v2 import MountScannerV2
 from assessment.ui.settings import Settings
@@ -22,15 +24,19 @@ from assessment.ui.state import workspace_conf_ini, workspace_url
 
 @solara.component
 def RepoScanner(mounts: pd.DataFrame, set_mounts: Callable[[pd.DataFrame], None],
-                issues: pd.DataFrame = None, set_issues: Callable[[pd.DataFrame], None] = None):
+                issues: pd.DataFrame = None, set_issues: Callable[[pd.DataFrame], None] = None,
+                repo_url: str = None, set_repo_url: Callable[[str], None] = None,
+                user: str = None, set_user: Callable[[str], None] = None,
+                token: str = None, set_token: Callable[[str], None] = None
+                ):
     # issues, set_issues = solara.use_state(None)
     loading, set_loading = solara.use_state(False)
     max_progress, set_max_progress = solara.use_state(0)
     progress, set_progress = solara.use_state(0)
     error, set_error = solara.use_state("")
-    repo_url, set_repo_url = solara.use_state("")
-    user, set_user = solara.use_state("")
-    token, set_token = solara.use_state("")
+    # repo_url, set_repo_url = solara.use_state("")
+    # user, set_user = solara.use_state("")
+    # token, set_token = solara.use_state("")
     curr_file, set_curr_file = solara.use_state("")
     uploaded_file_contents, set_uploaded_file_contents = solara.use_state(cast(Optional[bytes], None))
 
@@ -134,8 +140,9 @@ def RepoScanner(mounts: pd.DataFrame, set_mounts: Callable[[pd.DataFrame], None]
             with solara.lab.Tabs():
                 with solara.lab.Tab("Raw Data"):
                     solara.DataFrame(issues)
-                with solara.lab.Tab("Issue Breakdown Pie Chart"):
-                    solara.FigurePlotly(get_plotly_mounts())
+                if issues.shape[0] > 0:
+                    with solara.lab.Tab("Issue Breakdown Pie Chart"):
+                        solara.FigurePlotly(get_plotly_mounts())
 
 
 def make_logger_file_name(timestamp: str = None):
@@ -148,6 +155,9 @@ def Home():
         with solara.lab.Tabs():
             mounts, set_mounts = solara.use_state(cast(Optional[pd.DataFrame], None))
             issues, set_issues = solara.use_state(cast(Optional[List[Issue]], None))
+            repo_url, set_repo_url = solara.use_state("")
+            user, set_user = solara.use_state("")
+            token, set_token = solara.use_state("")
             with solara.lab.Tab(label="Mount Info"):
                 if workspace_conf_ini.value == "":
                     MountScanner(mounts, set_mounts)
@@ -155,9 +165,11 @@ def Home():
                     # uses multiple workspace clients
                     MountScannerV2(mounts, set_mounts)
             with solara.lab.Tab(label="Repo Scanner"):
-                RepoScanner(mounts, set_mounts, issues, set_issues)
-            # with solara.lab.Tab(label="Repo Find and Replace"):
-            #     CodeFindAndReplace(issues, set_issues)
+                RepoScanner(mounts, set_mounts, issues, set_issues, repo_url,
+                            set_repo_url, user, set_user, token, set_token)
+            if os.environ.get("EXPERIMENTAL_FIND_AND_REPLACE", "false").lower() == "true":
+                with solara.lab.Tab(label="Repo Find and Replace"):
+                    CodeFindAndReplace(issues, set_issues, repo_url, set_repo_url, user, set_user, token, set_token)
             with solara.lab.Tab(label="Manage Logs"):
                 LogBrowser(LOGS_FOLDER)
 

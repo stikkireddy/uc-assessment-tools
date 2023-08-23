@@ -233,3 +233,11 @@ def zip_bytes(input_bytes, file_name):
 
 
 log = setup_logger("default_logs.txt")
+
+stdout_handler = logging.StreamHandler()
+
+# Set the formatter for the handler
+set_up_formatter(stdout_handler)
+
+# Add the handler to the logger
+log.addHandler(stdout_handler)
