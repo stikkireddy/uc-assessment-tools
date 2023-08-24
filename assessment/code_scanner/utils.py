@@ -1,7 +1,10 @@
+import dataclasses
+import io
 import json
 import logging
 import os
 import time
+import zipfile
 from dataclasses import dataclass
 from typing import List, Optional, Union
 
@@ -25,6 +28,24 @@ def get_ws_client(default_profile="uc-assessment-azure"):
         return WorkspaceClient(host=host, token=token)
     return WorkspaceClient(profile=default_profile)
 
+
+def get_spark() -> Union["FakeSpark", "SparkSession"]:
+    try:
+        import IPython
+        ip_shell = IPython.get_ipython()
+        if ip_shell is None:
+            raise ValueError("Not in IPython")
+        _spark = ip_shell.ns_table["user_global"]["spark"]
+        if _spark is not None:
+            return _spark
+    except (ImportError, KeyError, AttributeError, ValueError):
+        pass
+
+    # we are not in databricks and need testing
+    spark = FakeSpark()
+    spark.conf._conf["spark.databricks.workspaceUrl"] = "some-workspace-url"
+    spark.conf._conf["spark.databricks.clusterUsageTags.orgId"] = "234141412412"
+    return spark
 
 
 def get_dbutils() -> Union["FakeDBUtils", "DBUtils"]:
@@ -100,6 +121,24 @@ class FakeSecrets:
         return [SecretMetadata(key=key) for key in self._secrets.get(scope).keys()]
 
 
+class FakeSpark:
+
+    def __init__(self):
+        self.conf = FakeSparkConf()
+
+
+class FakeSparkConf:
+
+    def __init__(self):
+        self._conf = {}
+
+    def get(self, key):
+        return self._conf.get(key, None)
+
+    def set(self, key, value):
+        self._conf[key] = value
+
+
 class FakeDBUtils:
 
     def __init__(self):
@@ -107,10 +146,16 @@ class FakeDBUtils:
         self.secrets = FakeSecrets()
 
 
-@dataclass
+@dataclass(init=False)
 class FakeMount:
     source: str
     mountPoint: str
+
+    def __init__(self, **kwargs):
+        names = set([f.name for f in dataclasses.fields(self)])
+        for k, v in kwargs.items():
+            if k in names:
+                setattr(self, k, v)
 
 
 class FakeFS:
@@ -177,4 +222,22 @@ def change_log_filename(logger, new_log_file):
     logger.addHandler(file_handler)
 
 
+def zip_bytes(input_bytes, file_name):
+    output_buffer = io.BytesIO()
+
+    with zipfile.ZipFile(output_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        zipf.writestr(file_name, input_bytes)
+
+    compressed_bytes = output_buffer.getvalue()
+    return compressed_bytes
+
+
 log = setup_logger("default_logs.txt")
+
+stdout_handler = logging.StreamHandler()
+
+# Set the formatter for the handler
+set_up_formatter(stdout_handler)
+
+# Add the handler to the logger
+log.addHandler(stdout_handler)

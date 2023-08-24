@@ -44,14 +44,15 @@ def git_repo(repo_url,
     log.info(f"Repository cloned to {path}")
 
     try:
-        if delete and branch:
-            # Delete the remote branch if it exists
-            remote = repo.remote()
-            try:
-                remote.push(refspec=f":{branch}")
-                log.info(f"Remote branch {branch} deleted.")
-            except git.exc.GitCommandError:
-                log.info(f"Remote branch {branch} doesn't exist.")
+        # DO NOT ALLOW DELETES
+        # if delete and branch:
+        #     # Delete the remote branch if it exists
+        #     remote = repo.remote()
+        #     try:
+        #         remote.push(refspec=f":{branch}")
+        #         log.info(f"Remote branch {branch} deleted.")
+        #     except git.exc.GitCommandError:
+        #         log.info(f"Remote branch {branch} doesn't exist.")
 
         # If branch is provided, create and switch to the new branch
         if branch:
@@ -67,9 +68,8 @@ def git_repo(repo_url,
                 log.info("Branch already exists. Checking out.")
                 repo.git.checkout(branch)
             else:
-                log.info("Branch doesn't exist. Creating and checking out.")
-                new_branch = repo.create_head(branch)
-                repo.head.reference = new_branch
+                log.error(f"Branch doesn't exist. Please make the branch on your provider: {branch}.")
+                raise ValueError(f"Branch: {branch} doesn't exist.")
         else:
             log.info("No branch provided. Using the main branch.")
 

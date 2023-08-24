@@ -1,3 +1,4 @@
+import ast
 import enum
 import io
 import json
@@ -17,7 +18,7 @@ from typing import Iterator, TextIO, List, Dict, Optional, Tuple, Union, Callabl
 import pandas as pd
 from databricks.sdk import WorkspaceClient
 
-from assessment.code_scanner.mounts import mounts_iter, temp_valid_prefix
+from assessment.code_scanner.mounts import mounts_iter, temp_valid_prefix, Mount
 
 
 class SourceType(enum.Enum):
@@ -57,6 +58,7 @@ class Issue:
     matched_regex: Optional[str] = None
     matched_line: Optional[str] = None
     matched_value: Optional[str] = None
+    workspace_url: Optional[str] = None
 
     @staticmethod
     def issues_to_df(issues: Union[Iterator['Issue'], List['Issue']]) -> pd.DataFrame:
@@ -66,6 +68,32 @@ class Issue:
             return pd.DataFrame(issues)
         return pd.DataFrame(columns=["issue_type", "issue_detail", "issue_source", "line_number", "matched_regex", ])
 
+    @staticmethod
+    def from_df(pdf: pd.DataFrame) -> List["Issue"]:
+        issues = []
+        try:
+            for row in pdf.to_dict(orient="records"):
+                iss = Issue(**row)
+                # Csv will have it as a python string
+                issue_source_raw = row.get("issue_source", "{}")
+                if isinstance(issue_source_raw, str):
+                    issue_src = ast.literal_eval(issue_source_raw)
+                    src_type = SourceType[issue_src.get("source_type")]
+                    issue_src = IssueSource(**issue_src)
+                    issue_src.source_type = src_type
+                else:
+                    issue_src = IssueSource(**issue_source_raw)
+                iss.issue_source = issue_src
+                issues.append(iss)
+        except Exception as e:
+            log.error("Error parsing issues csv: %s", e)
+        finally:
+            return issues
+
+    @staticmethod
+    def from_csv_bytes(csv_bytes: bytes) -> Iterator['Issue']:
+        pdf = pd.read_csv(io.BytesIO(csv_bytes))
+        return Issue.from_df(pdf)
 
 @dataclass
 class IssueInfo:
@@ -123,8 +151,24 @@ def is_this_a_fuse_mount(match_value: str, line: str) -> bool:
     return False
 
 
-def get_exact_match(idx, line, issue_source: IssueSource) -> Optional[Issue]:
-    for mnt in mounts_iter(temp_valid_prefix):
+def has_multiple_occurrences(string, inputs: List[str]) -> bool:
+    occurrence_count = {}
+
+    for input_str in inputs:
+        count = string.count(input_str)
+        occurrence_count[input_str] = count
+
+        if count > 1:
+            return True
+
+    return False
+
+def get_exact_match(idx, line,
+                    issue_source: IssueSource,
+                    discovered_mounts: Optional[List[Mount]] = None) -> Optional[List[Issue]]:
+    multiple_issues = []
+    has_mult_occurs = has_multiple_occurrences(line, ["/mnt"])
+    for mnt in discovered_mounts or mounts_iter(temp_valid_prefix):
         r, simple_match = mnt.find_simple_match(line)
         if simple_match is not None:
             if is_this_a_fuse_mount(simple_match, line):
@@ -133,29 +177,46 @@ def get_exact_match(idx, line, issue_source: IssueSource) -> Optional[Issue]:
                 issue_detail = "MAYBE_FOUND_OTHER_CLOUD_PROTOCOLS"
             else:
                 issue_detail = "SIMPLE"
-            return Issue(line_number=int(idx) + 1, matched_regex=r,
-                         matched_value=simple_match,
-                         matched_line=line.strip(),
-                         issue_source=issue_source,
-                         issue_type="MATCHING_MOUNT_USE",
-                         issue_detail=issue_detail)
+            multiple_issues.append(Issue(line_number=int(idx) + 1, matched_regex=r,
+                                         matched_value=simple_match,
+                                         matched_line=line.strip(),
+                                         issue_source=issue_source,
+                                         issue_type="MATCHING_MOUNT_USE",
+                                         issue_detail=issue_detail))
+            if has_mult_occurs is False:
+                return multiple_issues
+            continue
         r, maybe_match = mnt.find_maybe_match(line)
         if maybe_match is not None:
-            return Issue(line_number=int(idx) + 1, matched_regex=r,
-                         matched_value=maybe_match,
-                         matched_line=line.strip(),
-                         issue_source=issue_source,
-                         issue_type="MATCHING_MOUNT_USE",
-                         issue_detail="MAYBE")
+            if f"get_uc_mount_target('{maybe_match}'," in line:
+                multiple_issues.append(Issue(line_number=int(idx) + 1, matched_regex=r,
+                                             matched_value=maybe_match,
+                                             matched_line=line.strip(),
+                                             issue_source=issue_source,
+                                             issue_type="MATCHING_MOUNT_USE",
+                                             issue_detail="ALREADY_CONVERTED"))
+            else:
+                multiple_issues.append(Issue(line_number=int(idx) + 1, matched_regex=r,
+                                             matched_value=maybe_match,
+                                             matched_line=line.strip(),
+                                             issue_source=issue_source,
+                                             issue_type="MATCHING_MOUNT_USE",
+                                             issue_detail="MAYBE"))
+            if has_mult_occurs is False:
+                return multiple_issues
+            continue
         r, cannot_convert_match = mnt.find_cannot_convert_match(line)
         if cannot_convert_match is not None:
-            return Issue(line_number=int(idx) + 1, matched_regex=r,
-                         matched_value=cannot_convert_match,
-                         matched_line=line.strip(),
-                         issue_source=issue_source,
-                         issue_type="MATCHING_MOUNT_USE",
-                         issue_detail="CANNOT_CONVERT")
-    return None
+            multiple_issues.append(Issue(line_number=int(idx) + 1, matched_regex=r,
+                                         matched_value=cannot_convert_match,
+                                         matched_line=line.strip(),
+                                         issue_source=issue_source,
+                                         issue_type="MATCHING_MOUNT_USE",
+                                         issue_detail="CANNOT_CONVERT"))
+            if has_mult_occurs is False:
+                return multiple_issues
+            continue
+    return multiple_issues
 
 
 def handle_magic(issue: Issue) -> Issue:
@@ -174,6 +235,7 @@ def handle_unsupported_file_types(issue: Issue):
 
 def generate_issues(content: TextIO, issue_regexprs: Dict[str, IssueInfo],
                     issue_source: IssueSource,
+                    discovered_mounts: Optional[List[Mount]] = None,
                     file_name: Optional[str] = None):
     # handle scala file issue
     # handle udf import issue or scala udf import issue
@@ -204,13 +266,17 @@ def generate_issues(content: TextIO, issue_regexprs: Dict[str, IssueInfo],
                               issue_detail=info.issue_detail)
                 # if its a MOUNT_USE, try to see if its an exact match for a specific mount in ws
                 if issue.issue_type == "NON_MATCHING_MOUNT_USE":
-                    exact_match = get_exact_match(idx, line, issue_source)
-                    if exact_match is not None:
-                        issue = exact_match
-
-                # TODO: We assume right now that all magic commands are SQL, but we could see instances of python or
-                #  scala magic commands that could be handled.
-                yield handle_unsupported_file_types(handle_magic(issue))
+                    exact_match = get_exact_match(idx, line, issue_source, discovered_mounts)
+                    if exact_match is not None and exact_match != []:
+                        for iss in exact_match:
+                            yield handle_unsupported_file_types(handle_magic(iss))
+                    else:
+                        # TODO: We may not have any exact matches so just yield the generic capture of /mnt or /dbfs
+                        yield handle_unsupported_file_types(handle_magic(issue))
+                else:
+                    # TODO: We assume right now that all magic commands are SQL, but we could see instances of python or
+                    #  scala magic commands that could be handled.
+                    yield handle_unsupported_file_types(handle_magic(issue))
                 break
 
 
@@ -219,6 +285,8 @@ class CodeStrategy(ABC):
     # we will have different implementations for dbfs, adls, git repositories, s3, etc
     # implement download_code_directories if you are downloading files from somewhere to local file system
     # implement download_content_items if you are downloading files from api into memory
+    def __init__(self, discovered_mounts: Optional[List[Mount]] = None):
+        self._discovered_mounts = discovered_mounts
 
     @abstractmethod
     def iter_content(self) -> Iterator[Tuple[IssueSource, TextIO]]:
@@ -228,10 +296,12 @@ class CodeStrategy(ABC):
         for issue_source, content_ in self.iter_content():
             try:
                 log.info(f"Scanning {issue_source.source_metadata.get('relative_file_path')}")
-                yield from generate_issues(content_, issue_cfg, issue_source=issue_source, file_name=None)
+                yield from generate_issues(content_, issue_cfg, issue_source=issue_source, file_name=None,
+                                           discovered_mounts=self._discovered_mounts)
             except (OSError, UnicodeDecodeError):
                 log.error(
-                    f"Unable to open file {issue_source.source_metadata.get('relative_file_path')}; src: {str(issue_source)}")
+                    f"Unable to open file {issue_source.source_metadata.get('relative_file_path')}; "
+                    f"src: {str(issue_source)}")
                 pass
 
     def to_df(self) -> pd.DataFrame:
@@ -243,8 +313,9 @@ class LocalFSCodeStrategy(CodeStrategy):
     def __init__(self, directories: List[Path],
                  set_max_prog: Callable[[int], None] = None,
                  set_curr_prog: Callable[[int], None] = None,
-                 set_curr_file: Callable[[str], None] = None
-                 ):
+                 set_curr_file: Callable[[str], None] = None,
+                 discovered_mounts: Optional[List[Mount]] = None):
+        super().__init__(discovered_mounts=discovered_mounts)
         self.set_curr_file = set_curr_file
         self.set_curr_prog = set_curr_prog
         self.set_max_prog = set_max_prog
@@ -253,6 +324,10 @@ class LocalFSCodeStrategy(CodeStrategy):
     @staticmethod
     def get_path(src: IssueSource) -> str:
         return src.source_metadata.get("file_path")
+
+    @staticmethod
+    def get_relative_path(src: IssueSource) -> str:
+        return src.source_metadata.get("relative_file_path")
 
     @staticmethod
     def file_count(directories: List[Path]) -> int:
@@ -304,6 +379,7 @@ class LocalFSCodeStrategy(CodeStrategy):
 class TestingCodeStrategyClusters(CodeStrategy):
 
     def __init__(self, api_client: WorkspaceClient):
+        super().__init__()
         self.api_client = api_client
 
     def iter_content(self):
