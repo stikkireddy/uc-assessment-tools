@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -7,7 +8,7 @@ from databricks.sdk.service.jobs import RunResultState, RunLifeCycleState
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Enum, UniqueConstraint, func, desc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, scoped_session
 
 Base = declarative_base()
 
@@ -115,47 +116,65 @@ class JobRunRepository:
 
     def make_session(self):
         self.engine = create_engine(f"sqlite:///{self.db_path}",  # f"?check_same_thread=False"
-                                    echo=self.logging_enabled)
+                                    echo=self.logging_enabled
+                                    )
         if self.create_if_not_exists is True:
             JobRun.metadata.create_all(self.engine)
-        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+        self.SessionLocal = scoped_session(sessionmaker(
+            autocommit=False,
+            autoflush=False,
+            bind=self.engine))
+
+    @contextmanager
+    def SqlSession(self):
+        """Provide a transactional scope around a series of operations."""
+        session = self.SessionLocal()
+        try:
+            yield session
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
 
     def create_job_run(self, job_run: JobRun) -> JobRun:
         if self.engine is None:
             self.make_session()
-        db = self.SessionLocal()
-        try:
-            db.add(job_run)
-            db.commit()
-            db.refresh(job_run)
-        except IntegrityError as e:
-            db.rollback()
-            existing_job_run = (
-                db.query(JobRun)
-                .filter(JobRun.workspace_url == job_run.workspace_url, JobRun.run_id == job_run.run_id)
-                .first()
-            )
-            return existing_job_run
-        return job_run
+        # db = self.SessionLocal()
+        with self.SessionLocal() as db:
+            try:
+                db.add(job_run)
+                db.commit()
+                db.refresh(job_run)
+            except IntegrityError as e:
+                db.rollback()
+                existing_job_run = (
+                    db.query(JobRun)
+                    .filter(JobRun.workspace_url == job_run.workspace_url, JobRun.run_id == job_run.run_id)
+                    .first()
+                )
+                return existing_job_run
+            return job_run
 
     def update_job_run_state(self, run_state_updates: list):
         if self.engine is None:
             self.make_session()
-        db = self.SessionLocal()
-        updated_job_runs = []
+        # db = self.SessionLocal()
+        with self.SessionLocal() as db:
+            updated_job_runs = []
+            for run_id, lifecycle_state, result_state in run_state_updates:
+                job_run = db.query(JobRun).filter(JobRun.run_id == run_id).first()
+                if job_run:
+                    job_run.lifecycle_state = lifecycle_state
+                    if result_state:
+                        job_run.result_state = result_state
+                    job_run.state_updated_time = datetime.utcnow()
+                    if lifecycle_state in [RunLifeCycleState.TERMINATED, RunLifeCycleState.SKIPPED]:
+                        job_run.end_time = datetime.utcnow()
+                    updated_job_runs.append(job_run)
 
-        for run_id, lifecycle_state, result_state in run_state_updates:
-            job_run = db.query(JobRun).filter(JobRun.run_id == run_id).first()
-            if job_run:
-                job_run.lifecycle_state = lifecycle_state
-                if result_state:
-                    job_run.result_state = result_state
-                job_run.state_updated_time = datetime.utcnow()
-                if lifecycle_state in [RunLifeCycleState.TERMINATED, RunLifeCycleState.SKIPPED]:
-                    job_run.end_time = datetime.utcnow()
-                updated_job_runs.append(job_run)
-
-        db.commit()
+            # db.commit()
         return updated_job_runs
 
     def get_latest_run_results(self, workspace_urls: Optional[List[str]] = None,
@@ -164,30 +183,30 @@ class JobRunRepository:
                                ) -> List[JobRun]:
         if self.engine is None:
             self.make_session()
-        db = self.SessionLocal()
-
-        subquery = (
-            db.query(
-                JobRun,
-                func.row_number().over(
-                    partition_by=(JobRun.workspace_url, JobRun.job_name),
-                    order_by=desc(JobRun.start_time)
-                ).label("row_num")
+        # db = self.SessionLocal()
+        with self.SessionLocal() as db:
+            subquery = (
+                db.query(
+                    JobRun,
+                    func.row_number().over(
+                        partition_by=(JobRun.workspace_url, JobRun.job_name),
+                        order_by=desc(JobRun.start_time)
+                    ).label("row_num")
+                )
+                .filter(JobRun.workspace_url.in_(workspace_urls) if workspace_urls else True)
+                .filter(JobRun.job_name.in_(job_names) if job_names else True)
+                .subquery()
             )
-            .filter(JobRun.workspace_url.in_(workspace_urls) if workspace_urls else True)
-            .filter(JobRun.job_name.in_(job_names) if job_names else True)
-            .subquery()
-        )
 
-        query = (
-            db.query(subquery)
-            .filter(subquery.c.row_num <= num_runs)
-            .order_by(subquery.c.workspace_url, subquery.c.job_name, subquery.c.start_time.desc())
-        )
+            query = (
+                db.query(subquery)
+                .filter(subquery.c.row_num <= num_runs)
+                .order_by(subquery.c.workspace_url, subquery.c.job_name, subquery.c.start_time.desc())
+            )
 
-        latest_runs = query.all()
+            latest_runs = query.all()
 
-        return latest_runs
+            return latest_runs
 
     #
     # def get_latest_run_results(self, workspace_urls: Optional[List[str]] = None,
@@ -211,40 +230,43 @@ class JobRunRepository:
     def get_incomplete_run_ids(self, workspace_urls: list) -> List[str]:
         if self.engine is None:
             self.make_session()
-        db = self.SessionLocal()
-        incomplete_run_ids = (
-            db.query(JobRun.run_id)
-            .filter(
-                JobRun.workspace_url.in_(workspace_urls),
-                JobRun.lifecycle_state.notin_([RunLifeCycleState.TERMINATED,
-                                               RunLifeCycleState.INTERNAL_ERROR,
-                                               RunLifeCycleState.SKIPPED]),
+        # db = self.SessionLocal()
+        with self.SessionLocal() as db:
+            incomplete_run_ids = (
+                db.query(JobRun.run_id)
+                .filter(
+                    JobRun.workspace_url.in_(workspace_urls),
+                    JobRun.lifecycle_state.notin_([RunLifeCycleState.TERMINATED,
+                                                   RunLifeCycleState.INTERNAL_ERROR,
+                                                   RunLifeCycleState.SKIPPED]),
+                )
+                .all()
             )
-            .all()
-        )
-        return [run_id for (run_id,) in incomplete_run_ids]
+            return [run_id for (run_id,) in incomplete_run_ids]
 
     def get_latest_successful_run(self, workspace_url: str, job_name: str) -> Optional[JobRun]:
         if self.engine is None:
             self.make_session()
-        db = self.SessionLocal()
-        latest_successful_run = (
-            db.query(JobRun)
-            .filter(
-                JobRun.workspace_url == workspace_url,
-                JobRun.job_name == job_name,
-                JobRun.result_state == RunResultState.SUCCESS
+        # db = self.SessionLocal()
+        with self.SessionLocal() as db:
+            latest_successful_run = (
+                db.query(JobRun)
+                .filter(
+                    JobRun.workspace_url == workspace_url,
+                    JobRun.job_name == job_name,
+                    JobRun.result_state == RunResultState.SUCCESS
+                )
+                .order_by(JobRun.start_time.desc())
+                .first()
             )
-            .order_by(JobRun.start_time.desc())
-            .first()
-        )
-        return latest_successful_run
+            return latest_successful_run
 
     def list(self):
         if self.engine is None:
             self.make_session()
-        db = self.SessionLocal()
-        return db.query(JobRun).all()
+        # db = self.SessionLocal()
+        with self.SessionLocal() as db:
+            return db.query(JobRun).all()
 
 # if __name__ == "__main__":
 #     job_run_repo = JobRunRepository(db_path=Path("/Users/sri.tikkireddy/PycharmProjects/uc-assessment-tools/tmp_db/test.db"))
