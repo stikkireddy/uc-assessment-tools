@@ -67,12 +67,12 @@ def get_clients_urls_clusters(selected_ws: solara.Reactive[List[str]]):
 
 db_base_path = Path(get_db_base_path()).parent
 
+repo = JobRunRepository(db_base_path / "test.db")  # create instance of JobRunRepository
 
 @solara.component
 def AssessmentBlock(assessment_name: str, selected_ws: solara.Reactive[List[str]],
                     manager_klass: Type[BaseJobsResultsManager]):
     # assessment_rows, set_assessment_rows = solara.use_state(cast(List[AssessmentRow], []))
-    repo = JobRunRepository(db_base_path / "test.db")  # create instance of JobRunRepository
     run_history, set_run_history = solara.use_state(cast(pd.DataFrame, None))
     latest_runs, set_latest_runs = solara.use_state(cast(pd.DataFrame, None))
     loading, set_loading = solara.use_state(False)
@@ -82,10 +82,10 @@ def AssessmentBlock(assessment_name: str, selected_ws: solara.Reactive[List[str]
     runs_results, set_runs_results = solara.use_state(cast(List[JobRunResults], None))
 
     def get_assessment_rows():
-        clients, urls, cluster_dict, _ = get_clients_urls_clusters(selected_ws)
-        manager = manager_klass(clients, repo, cluster_dict)
         while True:
             set_loading(True)
+            clients, urls, cluster_dict, _ = get_clients_urls_clusters(selected_ws)
+            manager = manager_klass(clients, repo, cluster_dict)
             set_run_history(JobRun.to_dataframe(
                 repo.get_latest_run_results(urls,
                                             [manager.job_name()],
@@ -114,12 +114,13 @@ def AssessmentBlock(assessment_name: str, selected_ws: solara.Reactive[List[str]
         set_assessment_loading(False)
 
     def update_assessment():
-        clients, urls, cluster_dict, _ = get_clients_urls_clusters(selected_ws)
         # repo = JobRunRepository(db_base_path / "test.db")
-        manager = manager_klass(clients, repo, cluster_dict)
         while True:
             set_loading(True)
-            set_run_history_msg(f"Updating assessment status... last refreshed: {datetime.utcnow()}")
+            clients, urls, cluster_dict, _ = get_clients_urls_clusters(selected_ws)
+            manager = manager_klass(clients, repo, cluster_dict)
+            set_run_history_msg(
+                f"Updating assessment status for workspaces: {selected_ws.value} last refreshed: {datetime.utcnow()}")
             manager.update_run_status()
             set_loading(False)
             time.sleep(5)

@@ -34,6 +34,12 @@ class BaseJobsResultsManager(abc.ABC):
         self._ws_clients = databricks_ws_clients
         self._repository = repository
 
+    def set_clients(self, databricks_ws_clients: List[WorkspaceClient]):
+        self._ws_clients = databricks_ws_clients
+
+    def set_ws_url_cluster_id_mapping(self, workspace_url_cluster_id_mapping: Dict[str, str]):
+        self._workspace_url_cluster_id_mapping = workspace_url_cluster_id_mapping
+
     @abc.abstractmethod
     def _get_results(self, workspace_client: WorkspaceClient, cluster_id: str) -> Iterator[JobRunResults]:
         pass
@@ -100,7 +106,7 @@ class BaseJobsResultsManager(abc.ABC):
             state_updates = []
             for run_id in runs:
                 run_status = client.jobs.get_run(run_id=run_id).state
-                log.debug(f"Updating run_id: {run_id} with state: {run_status.life_cycle_state}")
+                log.info(f"Updating run_id: {run_id} with state: {run_status.life_cycle_state}")
                 state_updates.append((run_id, run_status.life_cycle_state or RunLifeCycleState.PENDING,
                                       run_status.result_state))
 
