@@ -60,25 +60,29 @@ class JobRun(Base):
     @staticmethod
     def to_display_dataframe(runs: List['JobRun']) -> pd.DataFrame:
         data = []
+
+        def remove_millis(dt):
+            return str(dt).split(".")[0]
+
         for job_run in runs:
             if job_run.result_state is None:
                 result_state = "Not Available"
             elif job_run.result_state == RunResultState.SUCCESS:
-                result_state = f":white_check_mark: {job_run.result_state.value}"
+                result_state = f"{job_run.result_state.value}"
             else:
-                result_state = f":x: {job_run.result_state.value}"
+                result_state = f"{job_run.result_state.value}"
             life_cycle_state = (job_run.lifecycle_state and job_run.lifecycle_state.value) or "PENDING"
             data.append({
                 'id': job_run.id,
-                'workspace_alias': job_run.workspace_alias,
-                'run_id': job_run.run_id,
+                'alias': job_run.workspace_alias,
+                # 'run_id': job_run.run_id,
                 'run_url': job_run.run_url,
                 'workspace_url': job_run.workspace_url,
-                'lifecycle_state': life_cycle_state,
-                'result_state': result_state,
-                'state_updated_time': job_run.state_updated_time,
-                'start_time': job_run.start_time,
-                'end_time': job_run.end_time
+                'lifecycle': life_cycle_state,
+                'result': result_state,
+                'last_updated': remove_millis(job_run.state_updated_time),
+                'start': remove_millis(job_run.start_time),
+                'end': remove_millis(job_run.end_time)
             })
 
         df = pd.DataFrame(data)
