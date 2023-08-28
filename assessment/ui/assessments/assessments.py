@@ -69,7 +69,8 @@ def get_clients_urls_clusters(selected_ws: solara.Reactive[List[str]]):
     return clients, urls, cluster_dict, workspace_alias_mapping
 
 
-repo = JobRunRepository(Path(get_db_base_path()).parent / "test.db")
+def get_repository():
+    return JobRunRepository(Path(get_db_base_path()).parent / "test.db")
 
 
 @solara.component
@@ -86,7 +87,7 @@ def AssessmentBlock(assessment_name: str, selected_ws: solara.Reactive[List[str]
         clients, urls, cluster_dict, _ = get_clients_urls_clusters(selected_ws)
         while True:
             set_loading(True)
-            set_run_history(JobRun.to_display_dataframe(repo.get_latest_run_results(urls,
+            set_run_history(JobRun.to_display_dataframe(get_repository().get_latest_run_results(urls,
                                                                                     ["hms_analysis"],
                                                                                     1)))
             set_loading(False)
@@ -95,7 +96,7 @@ def AssessmentBlock(assessment_name: str, selected_ws: solara.Reactive[List[str]
     def submit_assessment():
         set_assessment_loading(True)
         clients, urls, cluster_dict, workspace_alias_mapping = get_clients_urls_clusters(selected_ws)
-        manager = HMSAnalysisJob(clients, repo, cluster_dict)
+        manager = HMSAnalysisJob(clients, get_repository(), cluster_dict)
         manager.create_runs(urls, workspace_alias_mapping)
         set_assessment_loading(False)
 
@@ -104,7 +105,7 @@ def AssessmentBlock(assessment_name: str, selected_ws: solara.Reactive[List[str]
             set_loading(True)
             set_run_history_msg(f"Updating assessment status... last refreshed: {datetime.utcnow()}")
             clients, urls, cluster_dict, _ = get_clients_urls_clusters(selected_ws)
-            manager = HMSAnalysisJob(clients, repo, cluster_dict)
+            manager = HMSAnalysisJob(clients, get_repository(), cluster_dict)
             manager.update_run_status()
             set_loading(False)
             time.sleep(5)
@@ -112,7 +113,7 @@ def AssessmentBlock(assessment_name: str, selected_ws: solara.Reactive[List[str]
     def get_run_results():
         clients, urls, cluster_dict, _ = get_clients_urls_clusters(selected_ws)
         set_loading(True)
-        manager = HMSAnalysisJob(clients, repo, cluster_dict)
+        manager = HMSAnalysisJob(clients, get_repository(), cluster_dict)
         results = manager.get_latest_results(None)
         set_runs_results(results)
         set_loading(False)
