@@ -1,6 +1,5 @@
-from typing import cast, Optional, Tuple, List
+from typing import cast, Tuple, List
 
-import pandas as pd
 import solara
 
 from assessment.ui.models import WorkspaceConf
@@ -25,9 +24,6 @@ def ValidClientCheckList(selected_ws: solara.Reactive[List[str]], clusters: bool
             set_error(str(e))
             return
 
-
-    # result = None
-    # if increment > 0:
     result = solara.use_thread(validate_ws, [increment])
 
     if result.state == solara.ResultState.FINISHED:

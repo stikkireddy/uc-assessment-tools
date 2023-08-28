@@ -6,3 +6,5 @@ plotly
 pyarrow
 pydantic
 configparser
+sqlalchemy
+tabulate

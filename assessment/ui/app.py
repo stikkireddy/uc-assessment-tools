@@ -14,6 +14,7 @@ from assessment.code_scanner.mounts import mounts_from_pdf, temp_valid_prefix, M
 from assessment.code_scanner.repos import git_repo
 from assessment.code_scanner.scan import LocalFSCodeStrategy, Issue
 from assessment.code_scanner.utils import get_ws_client, change_log_filename, log, LOGS_FOLDER
+from assessment.ui.assessments.assessments import Assessments
 from assessment.ui.components.log_browser import LogBrowser
 from assessment.ui.mounts.code_replace import CodeFindAndReplace
 from assessment.ui.mounts.mount_scanner_v1 import MountScanner
@@ -158,6 +159,8 @@ def Home():
             repo_url, set_repo_url = solara.use_state("")
             user, set_user = solara.use_state("")
             token, set_token = solara.use_state("")
+            with solara.lab.Tab(label="Assessments"):
+                Assessments()
             with solara.lab.Tab(label="Mount Info"):
                 if workspace_conf_ini.value == "":
                     MountScanner(mounts, set_mounts)

@@ -6,6 +6,7 @@ import os
 import time
 import zipfile
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List, Optional, Union
 
 from databricks.sdk import WorkspaceClient
@@ -46,6 +47,13 @@ def get_spark() -> Union["FakeSpark", "SparkSession"]:
     spark.conf._conf["spark.databricks.workspaceUrl"] = "some-workspace-url"
     spark.conf._conf["spark.databricks.clusterUsageTags.orgId"] = "234141412412"
     return spark
+
+
+def get_db_base_path() -> str:
+    dbutils = get_dbutils()
+    if isinstance(dbutils, FakeDBUtils):
+        return str(Path(os.getcwd()) / "tmp_db" / "notebook")  # testing locally
+    return dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
 
 
 def get_dbutils() -> Union["FakeDBUtils", "DBUtils"]:
@@ -137,6 +145,9 @@ class FakeSparkConf:
 
     def set(self, key, value):
         self._conf[key] = value
+
+
+# dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
 
 
 class FakeDBUtils:
