@@ -121,7 +121,7 @@ class JobRunRepository:
         self.SessionLocal = sessionmaker(bind=self.engine)
 
     def create_job_run(self, job_run: JobRun) -> JobRun:
-        if self.engine is None:
+        if self.engine is None or self.SessionLocal is None:
             self.make_session()
         db = self.SessionLocal()
         try:
@@ -139,7 +139,7 @@ class JobRunRepository:
         return job_run
 
     def update_job_run_state(self, run_state_updates: list):
-        if self.engine is None:
+        if self.engine is None or self.SessionLocal is None:
             self.make_session()
         db = self.SessionLocal()
         updated_job_runs = []
@@ -162,7 +162,7 @@ class JobRunRepository:
                                job_names: Optional[List[str]] = None,
                                num_runs: int = 5
                                ) -> List[JobRun]:
-        if self.engine is None:
+        if self.engine is None or self.SessionLocal is None:
             self.make_session()
         db = self.SessionLocal()
 
@@ -209,7 +209,7 @@ class JobRunRepository:
     #     return latest_runs
 
     def get_incomplete_run_ids(self, workspace_urls: list) -> List[str]:
-        if self.engine is None:
+        if self.engine is None or self.SessionLocal is None:
             self.make_session()
         db = self.SessionLocal()
         incomplete_run_ids = (
@@ -225,7 +225,7 @@ class JobRunRepository:
         return [run_id for (run_id,) in incomplete_run_ids]
 
     def get_latest_successful_run(self, workspace_url: str, job_name: str) -> Optional[JobRun]:
-        if self.engine is None:
+        if self.engine is None or self.SessionLocal is None:
             self.make_session()
         db = self.SessionLocal()
         latest_successful_run = (
@@ -241,7 +241,7 @@ class JobRunRepository:
         return latest_successful_run
 
     def list(self):
-        if self.engine is None:
+        if self.engine is None or self.SessionLocal is None:
             self.make_session()
         db = self.SessionLocal()
         return db.query(JobRun).all()
