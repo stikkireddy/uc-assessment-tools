@@ -38,8 +38,13 @@ class JobRun(Base):
     __table_args__ = (UniqueConstraint('workspace_url', 'run_id', name='_workspace_run_uc'),)
 
     @staticmethod
-    def to_dataframe(runs: List['JobRun']) -> pd.DataFrame:
+    def to_dataframe(runs: List['JobRun'], json_friendly=False, no_millis=False) -> pd.DataFrame:
+
+        def remove_millis(dt):
+            return str(dt).split(".")[0]
+
         data = []
+
         for job_run in runs:
             data.append({
                 'id': job_run.id,
@@ -47,11 +52,12 @@ class JobRun(Base):
                 'run_url': job_run.run_url,
                 'workspace_url': job_run.workspace_url,
                 'workspace_alias': job_run.workspace_alias,
-                'lifecycle_state': job_run.lifecycle_state,
-                'result_state': job_run.result_state,
-                'state_updated_time': job_run.state_updated_time,
-                'start_time': job_run.start_time,
-                'end_time': job_run.end_time
+                'lifecycle_state': job_run.lifecycle_state if json_friendly is False else job_run.lifecycle_state.value,
+                'result_state': job_run.result_state if json_friendly is False else job_run.result_state.value,
+                'state_updated_time': job_run.state_updated_time if no_millis is False else remove_millis(
+                    job_run.state_updated_time),
+                'start_time': job_run.start_time if no_millis is False else remove_millis(job_run.start_time),
+                'end_time': job_run.end_time if no_millis is False else remove_millis(job_run.end_time)
             })
 
         df = pd.DataFrame(data)

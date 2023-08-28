@@ -1,6 +1,8 @@
 import abc
+from collections import defaultdict
+from dataclasses import dataclass
 from textwrap import dedent
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Iterator
 
 import pandas as pd
 from databricks.sdk import WorkspaceClient
@@ -11,6 +13,12 @@ from assessment.code_scanner.utils import log
 from assessment.jobs.assets import AssetManager
 from assessment.jobs.repository import JobRunRepository, JobRun
 
+
+@dataclass
+class JobRunResults:
+    name: str
+    data: pd.DataFrame
+    description: str
 
 class BaseJobsResultsManager(abc.ABC):
     # Goal of this class is to make sure job is executed successfully
@@ -27,38 +35,40 @@ class BaseJobsResultsManager(abc.ABC):
         self._repository = repository
 
     @abc.abstractmethod
-    def _get_results(self, workspace_client: WorkspaceClient, cluster_id: str) -> pd.DataFrame:
+    def _get_results(self, workspace_client: WorkspaceClient, cluster_id: str) -> Iterator[JobRunResults]:
         pass
 
     @abc.abstractmethod
     def job_name(self) -> str:
         pass
 
-    # @abc.abstractmethod
-    # def _ensure_artifacts(self, workspace_client: WorkspaceClient) -> None:
-    #     pass
-
     def get_latest_results(self,
-                           list_of_workspace_urls: Optional[List[str]] = None) -> pd.DataFrame:
-        dfs = []
+                           list_of_workspace_urls: Optional[List[str]] = None) -> Iterator[JobRunResults]:
+        results = defaultdict(list)
         list_of_workspace_urls = list_of_workspace_urls or [client.config.host for client in self._ws_clients]
         for client in self._ws_clients:
             if client.config.host in list_of_workspace_urls:
-                print("Getting results for workspace: ", client.config.host)
                 cluster_id = self._workspace_url_cluster_id_mapping[client.config.host]
-                df = self._get_results(client, cluster_id)
                 latest_job = self._repository.get_latest_successful_run(client.config.host, self.job_name())
-                df["_run_id"] = latest_job.run_id
-                df["_run_url"] = latest_job.run_url
-                df["_workspace_url"] = latest_job.workspace_url
-                df["_lifecycle_state"] = latest_job.lifecycle_state
-                df["_result_state"] = latest_job.result_state
-                df["_start_time"] = latest_job.start_time
-                df["_end_time"] = latest_job.end_time
-                dfs.append(df)
-        if not dfs:
-            return pd.DataFrame()
-        return pd.concat(dfs)
+                for res in self._get_results(client, cluster_id):
+                    df = res.data
+                    df["_run_id"] = latest_job.run_id
+                    df["_run_url"] = latest_job.run_url
+                    df["_workspace_url"] = latest_job.workspace_url
+                    df["_lifecycle_state"] = latest_job.lifecycle_state
+                    df["_result_state"] = latest_job.result_state
+                    df["_start_time"] = latest_job.start_time
+                    df["_end_time"] = latest_job.end_time
+                    results[res.name].append(res)
+        # if not dfs:
+        #     return pd.DataFrame()
+        for name, results_list in results.items():
+            if len(results_list) >= 1:
+                yield JobRunResults(name=name,
+                                    data=pd.concat([res.data for res in results_list]),
+                                    description=results_list[0].description)
+            else:
+                yield JobRunResults(name=name, data=pd.DataFrame(), description="")
 
     @abc.abstractmethod
     def _create_run(self, workspace_client: WorkspaceClient, cluster_id: str) -> str:
@@ -119,9 +129,9 @@ class HMSAnalysisJob(BaseJobsResultsManager):
     def _delta_table_path(self):
         return "/tmp/uc_assessment/hms/default.csv"
 
-    def _get_results(self, workspace_client: WorkspaceClient, cluster_id: str) -> pd.DataFrame:
+    def _get_results(self, workspace_client: WorkspaceClient, cluster_id: str) -> Iterator[JobRunResults]:
         with WorkspaceContextManager(workspace_client, cluster_id) as ctx:
-            return ctx.execute_python(dedent(f"""
+            df = ctx.execute_python(dedent(f"""
             df = spark.read.option("header","true").option("inferSchema","true").csv("{self._delta_table_path()}")
             df.createOrReplaceTempView("tmptable")
             spark.sql('''
@@ -130,8 +140,8 @@ class HMSAnalysisJob(BaseJobsResultsManager):
                 order by type, format
             ''').display()
             """), as_pdf=True)
-        # data = {'col_1': [3, 2, 1, 0], 'col_2': ['a', 'b', 'c', 'd']}
-        # return pd.DataFrame.from_dict(data)
+            yield JobRunResults(name="hms_analysis", data=df, description="HMS Analysis for Table Types in HMS")
+
 
     def _create_run(self, workspace_client: WorkspaceClient, cluster_id: str) -> str:
         path = AssetManager(workspace_client).notebook_path("inspect_metastore.py")
