@@ -49,11 +49,17 @@ def get_spark() -> Union["FakeSpark", "SparkSession"]:
     return spark
 
 
+def is_in_databricks() -> bool:
+    dbutils = get_dbutils()
+    if isinstance(dbutils, FakeDBUtils):
+        return False
+    return True
+
 def get_db_base_path() -> str:
     dbutils = get_dbutils()
     if isinstance(dbutils, FakeDBUtils):
         return str(Path(os.getcwd()) / "tmp_db" / "notebook")  # testing locally
-    return "/Workspace" + dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+    return dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
 
 
 def get_dbutils() -> Union["FakeDBUtils", "DBUtils"]:

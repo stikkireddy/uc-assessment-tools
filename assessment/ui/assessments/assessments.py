@@ -72,6 +72,7 @@ db_base_path = Path(get_db_base_path()).parent
 def AssessmentBlock(assessment_name: str, selected_ws: solara.Reactive[List[str]],
                     manager_klass: Type[BaseJobsResultsManager]):
     # assessment_rows, set_assessment_rows = solara.use_state(cast(List[AssessmentRow], []))
+    repo = JobRunRepository(db_base_path / "test.db")  # create instance of JobRunRepository
     run_history, set_run_history = solara.use_state(cast(pd.DataFrame, None))
     latest_runs, set_latest_runs = solara.use_state(cast(pd.DataFrame, None))
     loading, set_loading = solara.use_state(False)
@@ -82,7 +83,6 @@ def AssessmentBlock(assessment_name: str, selected_ws: solara.Reactive[List[str]
 
     def get_assessment_rows():
         clients, urls, cluster_dict, _ = get_clients_urls_clusters(selected_ws)
-        repo = JobRunRepository(db_base_path / "test.db")
         manager = manager_klass(clients, repo, cluster_dict)
         while True:
             set_loading(True)
@@ -108,7 +108,7 @@ def AssessmentBlock(assessment_name: str, selected_ws: solara.Reactive[List[str]
     def submit_assessment():
         set_assessment_loading(True)
         clients, urls, cluster_dict, workspace_alias_mapping = get_clients_urls_clusters(selected_ws)
-        repo = JobRunRepository(db_base_path / "test.db")
+        # repo = JobRunRepository(db_base_path / "test.db")
         manager = manager_klass(clients, repo, cluster_dict)
         manager.create_runs(urls, workspace_alias_mapping)
         set_assessment_loading(False)
@@ -118,7 +118,7 @@ def AssessmentBlock(assessment_name: str, selected_ws: solara.Reactive[List[str]
             set_loading(True)
             set_run_history_msg(f"Updating assessment status... last refreshed: {datetime.utcnow()}")
             clients, urls, cluster_dict, _ = get_clients_urls_clusters(selected_ws)
-            repo = JobRunRepository(db_base_path / "test.db")
+            # repo = JobRunRepository(db_base_path / "test.db")
             manager = manager_klass(clients, repo, cluster_dict)
             manager.update_run_status()
             set_loading(False)
@@ -127,7 +127,7 @@ def AssessmentBlock(assessment_name: str, selected_ws: solara.Reactive[List[str]
     def get_run_results():
         clients, urls, cluster_dict, _ = get_clients_urls_clusters(selected_ws)
         set_results_loading(True)
-        repo = JobRunRepository(db_base_path / "test.db")
+        # repo = JobRunRepository(db_base_path / "test.db")
         manager = manager_klass(clients, repo, cluster_dict)
         results = [result for result in manager.get_latest_results(None)]
         set_runs_results(results)

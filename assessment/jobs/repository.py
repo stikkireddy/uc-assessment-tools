@@ -97,7 +97,10 @@ class JobRun(Base):
 
 # Repository Abstraction
 class JobRunRepository:
-    def __init__(self, db_path: Path, create_if_not_exists=True, logging_enabled=False):
+    def __init__(self,
+                 db_path: Path,
+                 create_if_not_exists=True,
+                 logging_enabled=False, ):
         db_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the parent directory exists
         self.engine = create_engine(f"sqlite:///{db_path}",  # f"?check_same_thread=False"
                                     echo=logging_enabled)
