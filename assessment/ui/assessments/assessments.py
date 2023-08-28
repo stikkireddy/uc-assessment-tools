@@ -114,12 +114,12 @@ def AssessmentBlock(assessment_name: str, selected_ws: solara.Reactive[List[str]
         set_assessment_loading(False)
 
     def update_assessment():
+        clients, urls, cluster_dict, _ = get_clients_urls_clusters(selected_ws)
+        # repo = JobRunRepository(db_base_path / "test.db")
+        manager = manager_klass(clients, repo, cluster_dict)
         while True:
             set_loading(True)
             set_run_history_msg(f"Updating assessment status... last refreshed: {datetime.utcnow()}")
-            clients, urls, cluster_dict, _ = get_clients_urls_clusters(selected_ws)
-            # repo = JobRunRepository(db_base_path / "test.db")
-            manager = manager_klass(clients, repo, cluster_dict)
             manager.update_run_status()
             set_loading(False)
             time.sleep(5)
@@ -134,7 +134,7 @@ def AssessmentBlock(assessment_name: str, selected_ws: solara.Reactive[List[str]
         set_results_loading(False)
 
     solara.use_thread(get_assessment_rows, [selected_ws.value])
-    solara.use_thread(update_assessment, [])
+    solara.use_thread(update_assessment, [selected_ws.value])
 
     with solara.Details("", expand=True):
         ValidClientCheckList(selected_ws, clusters=True)

@@ -102,13 +102,27 @@ class JobRunRepository:
                  create_if_not_exists=True,
                  logging_enabled=False, ):
         db_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the parent directory exists
-        self.engine = create_engine(f"sqlite:///{db_path}",  # f"?check_same_thread=False"
-                                    echo=logging_enabled)
-        if create_if_not_exists is True:
+        self.create_if_not_exists = create_if_not_exists
+        self.logging_enabled = logging_enabled
+        self.db_path = db_path
+        self.engine = None
+        self.SessionLocal = None
+        # self.engine = create_engine(f"sqlite:///{db_path}",  # f"?check_same_thread=False"
+        #                             echo=logging_enabled)
+        # if create_if_not_exists is True:
+        #     JobRun.metadata.create_all(self.engine)
+        # self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+
+    def make_session(self):
+        self.engine = create_engine(f"sqlite:///{self.db_path}",  # f"?check_same_thread=False"
+                                    echo=self.logging_enabled)
+        if self.create_if_not_exists is True:
             JobRun.metadata.create_all(self.engine)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
 
     def create_job_run(self, job_run: JobRun) -> JobRun:
+        if self.engine is None:
+            self.make_session()
         db = self.SessionLocal()
         try:
             db.add(job_run)
@@ -125,6 +139,8 @@ class JobRunRepository:
         return job_run
 
     def update_job_run_state(self, run_state_updates: list):
+        if self.engine is None:
+            self.make_session()
         db = self.SessionLocal()
         updated_job_runs = []
 
@@ -146,6 +162,8 @@ class JobRunRepository:
                                job_names: Optional[List[str]] = None,
                                num_runs: int = 5
                                ) -> List[JobRun]:
+        if self.engine is None:
+            self.make_session()
         db = self.SessionLocal()
 
         subquery = (
@@ -191,6 +209,8 @@ class JobRunRepository:
     #     return latest_runs
 
     def get_incomplete_run_ids(self, workspace_urls: list) -> List[str]:
+        if self.engine is None:
+            self.make_session()
         db = self.SessionLocal()
         incomplete_run_ids = (
             db.query(JobRun.run_id)
@@ -205,6 +225,8 @@ class JobRunRepository:
         return [run_id for (run_id,) in incomplete_run_ids]
 
     def get_latest_successful_run(self, workspace_url: str, job_name: str) -> Optional[JobRun]:
+        if self.engine is None:
+            self.make_session()
         db = self.SessionLocal()
         latest_successful_run = (
             db.query(JobRun)
@@ -219,6 +241,8 @@ class JobRunRepository:
         return latest_successful_run
 
     def list(self):
+        if self.engine is None:
+            self.make_session()
         db = self.SessionLocal()
         return db.query(JobRun).all()
 
