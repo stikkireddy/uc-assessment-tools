@@ -48,16 +48,16 @@ class JobRun(Base):
         for job_run in runs:
             data.append({
                 'id': job_run.id,
-                'run_id': job_run.run_id,
-                'run_url': job_run.run_url,
-                'workspace_url': job_run.workspace_url,
                 'workspace_alias': job_run.workspace_alias,
+                'run_id': job_run.run_id,
                 'lifecycle_state': job_run.lifecycle_state if json_friendly is False else job_run.lifecycle_state.value,
                 'result_state': job_run.result_state if json_friendly is False else job_run.result_state and job_run.result_state.value,
+                'start_time': job_run.start_time if no_millis is False else remove_millis(job_run.start_time),
+                'end_time': job_run.end_time if no_millis is False else remove_millis(job_run.end_time),
+                'run_url': job_run.run_url,
                 'state_updated_time': job_run.state_updated_time if no_millis is False else remove_millis(
                     job_run.state_updated_time),
-                'start_time': job_run.start_time if no_millis is False else remove_millis(job_run.start_time),
-                'end_time': job_run.end_time if no_millis is False else remove_millis(job_run.end_time)
+                'workspace_url': job_run.workspace_url,
             })
 
         df = pd.DataFrame(data)
