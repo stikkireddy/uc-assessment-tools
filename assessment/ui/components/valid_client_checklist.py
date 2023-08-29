@@ -7,7 +7,9 @@ from assessment.ui.state import workspace_conf_ini
 
 
 @solara.component
-def ValidClientCheckList(selected_ws: solara.Reactive[List[str]], clusters: bool = False):
+def ValidClientCheckList(selected_ws: solara.Reactive[List[str]],
+                         clusters: bool = False,
+                         warning_if_none_selected: bool = False):
     increment, set_increment = solara.use_state(0)
     error, set_error = solara.use_state("")
     aliases, set_aliases = solara.use_state(cast(List[Tuple[str, str]], None))
@@ -28,7 +30,11 @@ def ValidClientCheckList(selected_ws: solara.Reactive[List[str]], clusters: bool
 
     if result.state == solara.ResultState.FINISHED:
         if aliases is not None:
-            solara.Info(f"Selected workspaces: {str(selected_ws.value)}")
+            if len(selected_ws.value) == 0 and warning_if_none_selected is True:
+                solara.Warning("No workspaces selected; please configure in settings "
+                               "and select workspaces in drop down.")
+            else:
+                solara.Info(f"Selected workspaces: {str(selected_ws.value)}")
             with solara.Column():
                 choices: List[str] = [alias[0] for alias in aliases]
                 solara.SelectMultiple(label="Workspaces", values=selected_ws, all_values=choices, dense=True)

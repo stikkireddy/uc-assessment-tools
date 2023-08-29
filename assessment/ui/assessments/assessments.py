@@ -10,7 +10,7 @@ import solara.lab
 
 from assessment.code_scanner.utils import get_db_base_path, zip_bytes
 from assessment.jobs.assets import AssetManager
-from assessment.jobs.manager import HMSAnalysisJob, JobRunResults, BaseJobsResultsManager
+from assessment.jobs.manager import HMSAnalysisJob, JobRunResults, BaseJobsResultsManager, ComputeAnalysisJob
 from assessment.jobs.repository import JobRunRepository, JobRun
 from assessment.ui.components.valid_client_checklist import ValidClientCheckList
 from assessment.ui.models import WorkspaceConf
@@ -138,9 +138,10 @@ def AssessmentBlock(assessment_name: str, selected_ws: solara.Reactive[List[str]
     solara.use_thread(update_assessment, [selected_ws.value])
 
     with solara.Details("", expand=True):
-        ValidClientCheckList(selected_ws, clusters=True)
+        ValidClientCheckList(selected_ws, clusters=True, warning_if_none_selected=True)
         solara.Button(f"Run {assessment_name} on selected workspaces",
-                      icon_name="play_arrow", on_click=submit_assessment)
+                      icon_name="play_arrow", on_click=submit_assessment,
+                      disabled=assessment_loading or len(selected_ws.value) == 0)
 
         if assessment_loading is True:
             Space()
@@ -197,7 +198,7 @@ def AssetsBlock(selected_ws: solara.Reactive[List[str]]):
     workspace_url, set_workspace_url = solara.use_state("")
 
     with solara.Details("", expand=True):
-        ValidClientCheckList(selected_ws, clusters=True)
+        ValidClientCheckList(selected_ws, clusters=True, warning_if_none_selected=True)
 
         def upload_all_assets():
             set_loading(True)
@@ -208,7 +209,9 @@ def AssetsBlock(selected_ws: solara.Reactive[List[str]]):
             set_workspace_url("")
             set_loading(False)
 
-        solara.Button("Upload All Assets", icon_name="cloud_upload", on_click=upload_all_assets)
+        solara.Button("Upload All Assets", icon_name="cloud_upload",
+                      on_click=upload_all_assets,
+                      disabled=loading or len(selected_ws.value) == 0)
         if loading is True:
             solara.Info(f"Uploading all assets... to {workspace_url}")
             solara.ProgressLinear(True)
@@ -222,3 +225,5 @@ def Assessments():
             AssetsBlock(selected_ws)
         with solara.Card("HMS Assessment"):
             AssessmentBlock("HMS Assessment", selected_ws, HMSAnalysisJob)
+        with solara.Card("Compute Assessment"):
+            AssessmentBlock("Compute Assessment", selected_ws, ComputeAnalysisJob)

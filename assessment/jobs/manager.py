@@ -1,6 +1,7 @@
 import abc
 from collections import defaultdict
 from dataclasses import dataclass
+from pathlib import Path
 from textwrap import dedent
 from typing import List, Tuple, Dict, Optional, Iterator
 
@@ -19,6 +20,8 @@ class JobRunResults:
     name: str
     data: pd.DataFrame
     description: str
+    code: Optional[str] = None
+
 
 class BaseJobsResultsManager(abc.ABC):
     # Goal of this class is to make sure job is executed successfully
@@ -28,17 +31,13 @@ class BaseJobsResultsManager(abc.ABC):
     def __init__(self,
                  databricks_ws_clients: List[WorkspaceClient],
                  repository: JobRunRepository,
-                 workspace_url_cluster_id_mapping: Dict[str, str]
+                 workspace_url_cluster_id_mapping: Dict[str, str],
+                 workspace_alias_mapping: Dict[str, str] = None
                  ):
+        self._workspace_alias_mapping = workspace_alias_mapping or {}
         self._workspace_url_cluster_id_mapping = workspace_url_cluster_id_mapping
         self._ws_clients = databricks_ws_clients
         self._repository = repository
-
-    def set_clients(self, databricks_ws_clients: List[WorkspaceClient]):
-        self._ws_clients = databricks_ws_clients
-
-    def set_ws_url_cluster_id_mapping(self, workspace_url_cluster_id_mapping: Dict[str, str]):
-        self._workspace_url_cluster_id_mapping = workspace_url_cluster_id_mapping
 
     @abc.abstractmethod
     def _get_results(self, workspace_client: WorkspaceClient, cluster_id: str) -> Iterator[JobRunResults]:
@@ -58,16 +57,17 @@ class BaseJobsResultsManager(abc.ABC):
                 latest_job = self._repository.get_latest_successful_run(client.config.host, self.job_name())
                 for res in self._get_results(client, cluster_id):
                     df = res.data
-                    df["_run_id"] = latest_job.run_id
-                    df["_run_url"] = latest_job.run_url
-                    df["_workspace_url"] = latest_job.workspace_url
-                    df["_lifecycle_state"] = latest_job.lifecycle_state
-                    df["_result_state"] = latest_job.result_state
-                    df["_start_time"] = latest_job.start_time
-                    df["_end_time"] = latest_job.end_time
+                    # latest job can be null if the database is deleted
+                    if latest_job is not None:
+                        df["_run_id"] = latest_job.run_id
+                        df["_run_url"] = latest_job.run_url
+                        df["_workspace_url"] = latest_job.workspace_url
+                        df["_lifecycle_state"] = latest_job.lifecycle_state
+                        df["_result_state"] = latest_job.result_state
+                        df["_start_time"] = latest_job.start_time
+                        df["_end_time"] = latest_job.end_time
                     results[res.name].append(res)
-        # if not dfs:
-        #     return pd.DataFrame()
+
         for name, results_list in results.items():
             if len(results_list) >= 1:
                 yield JobRunResults(name=name,
@@ -148,21 +148,94 @@ class HMSAnalysisJob(BaseJobsResultsManager):
             """), as_pdf=True)
             yield JobRunResults(name="hms_analysis", data=df, description="HMS Analysis for Table Types in HMS")
 
-
     def _create_run(self, workspace_client: WorkspaceClient, cluster_id: str) -> str:
         path = AssetManager(workspace_client).notebook_path("inspect_metastore.py")
-        # res = workspace_client.jobs.run_now(job_id=18780851108171)
         run_wait = workspace_client.jobs.submit(
             run_name=self.job_name(),
             tasks=[
                 SubmitTask(
-                    task_key="hms_analysis",
+                    task_key=f"{self.job_name()}_task",
                     existing_cluster_id=cluster_id,  # TODO REMOVE
                     notebook_task=NotebookTask(
                         notebook_path=path,
                         base_parameters={
                             "dbfs_file_path": self._delta_table_path(),
                             "debug_mode": "True"
+                        }
+                    )
+                )
+            ]
+        )
+        return run_wait.response.run_id
+
+
+class ComputeAnalysisJob(BaseJobsResultsManager):
+
+    def job_name(self) -> str:
+        return "compute_analysis"
+
+    def _delta_table_base_path(self):
+        # needs to start with dbfs according to the job
+        return "dbfs:/tmp/uc_assessment/compute/"
+
+    def _final_analysis_table(self) -> str:
+        return str(Path(self._delta_table_base_path()) / "analysis/compute_issues/delta")
+
+    def _final_jobs_table(self) -> str:
+        return str(Path(self._delta_table_base_path()) / "jobs/delta")
+
+    def _final_job_runs_table(self) -> str:
+        return str(Path(self._delta_table_base_path()) / "job_submit_runs/delta")
+
+    def _get_results(self, workspace_client: WorkspaceClient, cluster_id: str) -> Iterator[JobRunResults]:
+        with WorkspaceContextManager(workspace_client, cluster_id) as ctx:
+            df = ctx.execute_python(dedent(f"""
+            spark.sql('''
+                SELECT _workspace_url, entity_type, "TOTAL_ENTITIES" as metric_type, count(DISTINCT entity_id) as metric_value
+                FROM
+                  (SELECT "WORKFLOW" as entity_type, job_id as entity_id, _workspace_url FROM delta.`{self._final_jobs_table()}` UNION ALL
+                  SELECT "SUBMIT_RUN" as entity_type, run_id as entity_id, _workspace_url FROM delta.`{self._final_job_runs_table()}`)
+                  GROUP BY 1, 2, 3
+                UNION ALL
+                SELECT workspace_url, entity_type, "TOTAL_ENTITIES_WITH_ISSUES" as metric_type, count(DISTINCT entity_id) as metric_value
+                FROM delta.`{self._final_analysis_table()}`
+                WHERE contains(entity_issue_type, "NOT_AN_ISSUE_") is false
+                GROUP BY 1, 2, 3
+            ''').display()
+            """), as_pdf=True)
+            yield JobRunResults(name="workflow_issue_summary", data=df,
+                                description="Workflow Analysis for workflows with issues and workflows without")
+
+            df = ctx.execute_python(dedent(f"""
+                spark.sql('''
+                    SELECT workspace_url, entity_type, entity_issue_type, entity_issue_detail, sum(issue_ct) as issue_ct
+                FROM
+                (SELECT workspace_url, entity_type,entity_id, entity_issue_type, entity_issue_detail, count(1) as issue_ct 
+                    FROM delta.`{self._final_analysis_table()}`
+                GROUP BY 1, 2, 3, 4, 5)
+                GROUP BY 1, 2, 3, 4
+                ORDER BY 5 desc
+                ''').display()
+            """), as_pdf=True)
+            yield JobRunResults(name="issue_summary", data=df,
+                                description="List of all issues and count of issues.")
+
+    def _create_run(self, workspace_client: WorkspaceClient, cluster_id: str) -> str:
+        path = AssetManager(workspace_client).notebook_path("inspect_compute.py")
+        run_wait = workspace_client.jobs.submit(
+            run_name=self.job_name(),
+            tasks=[
+                SubmitTask(
+                    task_key=f"{self.job_name()}_task",
+                    existing_cluster_id=cluster_id,  # TODO REMOVE
+                    notebook_task=NotebookTask(
+                        notebook_path=path,
+                        base_parameters={
+                            "dbfs_folder_path": self._delta_table_base_path(),
+                            "debug_mode": "True",
+                            "workspace_name": self._workspace_alias_mapping.get(workspace_client.config.host,
+                                                                                "unidentified"),
+                            "workspace_url": workspace_client.config.host
                         }
                     )
                 )
