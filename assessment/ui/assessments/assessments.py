@@ -10,7 +10,7 @@ import solara.lab
 
 from assessment.code_scanner.utils import get_db_base_path, zip_bytes
 from assessment.jobs.assets import AssetManager
-from assessment.jobs.manager import HMSAnalysisJob, JobRunResults, BaseJobsResultsManager, ComputeAnalysisJob
+from assessment.jobs.manager import JobRunResults, BaseJobsResultsManager, ComputeAnalysisJob
 from assessment.jobs.repository import JobRunRepository, JobRun
 from assessment.ui.components.valid_client_checklist import ValidClientCheckList
 from assessment.ui.models import WorkspaceConf
@@ -223,7 +223,7 @@ def Assessments():
     with solara.Card("Assessments"):
         with solara.Card("Assets"):
             AssetsBlock(selected_ws)
-        with solara.Card("HMS Assessment"):
-            AssessmentBlock("HMS Assessment", selected_ws, HMSAnalysisJob)
+        # with solara.Card("HMS Assessment"):
+        #     AssessmentBlock("HMS Assessment", selected_ws, HMSAnalysisJob)
         with solara.Card("Compute Assessment"):
             AssessmentBlock("Compute Assessment", selected_ws, ComputeAnalysisJob)
