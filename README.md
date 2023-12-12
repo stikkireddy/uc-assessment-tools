@@ -30,8 +30,27 @@
 https://raw.githubusercontent.com/stikkireddy/uc-assessment-tools/main/notebooks/01_REPO_SCANNER.py
 2. Connect to a cluster that is not UC enabled and is runtime 13.3 ML LTS
 3. Run the notebook end to end
-4. Run the last cell as many times as needed to render the widgets (the first time may not work)
-    1. This is just a databricks quirk
-5. In the widget/ui go to Mount Info tab, run it and then download the mount info csv file
-6. In the widget/ui go to Repo Scanner tab, enter your repo info, click scan and download issues
-   1. After running the scan go to Issue breakdown chart and click on the chart and download as png.
+4. Click the link produced by the last cell
+5. Create a cfg file with the following information (host, token and cluster_id for a cluster that exists in the
+   workspace)
+
+``` toml
+[workspace1]
+host  = <workspace-url>
+token = <databricks token>
+cluster_id = 0329-145545-rugby794
+
+[workspace2]
+host  = <workspace-url>
+token = <databricks token>
+cluster_id = 0807-225846-motto493
+```
+
+6. Go to settings and upload the cfg file
+7. Go to home
+8. Use the mount info, repo scanner and find and replace as needed; **find and replace** is purely experimental.
+
+## Disclaimer
+
+UC-Assessment-Tools is not developed, endorsed not supported by Databricks. It is provided as-is; no warranty is derived
+from using this package. For more details, please refer to the license.
