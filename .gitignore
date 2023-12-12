@@ -164,3 +164,4 @@ tmp_repos
 .idea
 tmp
 logs
+tmp_*
